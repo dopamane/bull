@@ -7,6 +7,7 @@ module Bull
 import Bull.Cli
 import Bull.Client
 import Bull.Message
+import Bull.Net
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad
@@ -18,7 +19,7 @@ bullMain cli = case cli of
 
 runClient :: BullNet -> IO ()
 runClient net = withBullClient $ \client -> do
-  connectBullClient client (bullHost net) (bullPort net)
+  connectBullClient client (netHost net) (netPort net)
   withBullMessage client net $ \msgr ->
     logBullMessages msgr $ do
         versionHandshake msgr

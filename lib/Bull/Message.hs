@@ -13,13 +13,11 @@ module Bull.Message
   , mkVerackMsg
   , sendVerackMsg
   , versionHandshake
-  , BullNet(..)
-  , bullMainnet
-  , bullTestnet
   ) where
 
 import Bull.Client
 import Bull.Message.Version
+import Bull.Net
 import Bull.Pretty
 import Control.Concurrent.Async
 import Control.Concurrent.STM
@@ -32,7 +30,6 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Digest.Pure.SHA
 import Data.Function
-import Data.IP
 import Foreign.C
 import Prettyprinter
 import System.Posix
@@ -60,7 +57,7 @@ withBullMessage client' net' k = do
   either id id <$> race (runBullMessage hndl) (k hndl)
 
 sendBullMessage :: BullMessageHandle -> BullMessage -> IO ()
-sendBullMessage hndl = sendBullClient (client hndl) . encode
+sendBullMessage hndl = sendBullClient (client hndl) . runPut . putMessage
 
 recvBullMessage
   :: BullMessageHandle
@@ -74,7 +71,7 @@ runBullMessage :: BullMessageHandle -> IO a
 runBullMessage hndl = recvBullClient (client hndl) $ runDecoder hndl mempty
 
 runDecoder :: BullMessageHandle -> ByteString -> IO ByteString -> IO a
-runDecoder hndl bs bsIO = loop $ runGetIncremental get
+runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
   where
     loop decoder
       | L.null bs = pushChunks' =<< bsIO
@@ -104,19 +101,15 @@ instance Pretty BullMessage where
       ]
     ]
 
-instance Binary BullMessage where
-  get = getMessage
-  put = putMessage
-
-getMessage :: Get BullMessage
-getMessage = do
-  hdr <- get
+getMessage :: BullNet -> Get BullMessage
+getMessage n = do
+  hdr <- getHeader n
   let size = fromIntegral $ bmhPayloadSize hdr
   BullMessage hdr <$> getLazyByteString size
 
 putMessage :: BullMessage -> Put
 putMessage msg = do
-  put $ bmHeader msg
+  putHeader $ bmHeader msg
   putLazyByteString $ bmPayload msg
 
 data BullMessageHeader = BullMessageHeader
@@ -161,31 +154,20 @@ renderCommandName :: BullMessageHeader -> Doc ann
 renderCommandName =
   pretty . LC.unpack . L.takeWhile (/= 0x00) . bmhCommandName
 
-instance Binary BullMessageHeader where
-  get = getHeader
-  put = putHeader
-
-getHeader :: Get BullMessageHeader
-getHeader =
+getHeader :: BullNet -> Get BullMessageHeader
+getHeader n =
   BullMessageHeader
-    <$> getStartString
+    <$> getStartString n
     <*> getLazyByteString 12
     <*> getWord32le
     <*> getLazyByteString 4
 
 -- | validate start string
-getStartString :: Get ByteString
-getStartString = do
+getStartString :: BullNet -> Get ByteString
+getStartString n = do
   s <- getLazyByteString 4
-  when (s /= mainnetStartString && s /= testnetStartString) $
-    fail "invalid start string"
+  when (s /= netStartString n) $ fail "invalid start string"
   return s
-
-mainnetStartString :: ByteString
-mainnetStartString = L.pack [0xF9, 0xBE, 0xB4, 0xD9]
-
-testnetStartString :: ByteString
-testnetStartString = L.pack [0x0B, 0x11, 0x09, 0x07]
 
 putHeader :: BullMessageHeader -> Put
 putHeader hdr = do
@@ -193,27 +175,6 @@ putHeader hdr = do
   putLazyByteString $ bmhCommandName hdr
   putWord32le       $ bmhPayloadSize hdr
   putLazyByteString $ bmhChecksum    hdr
-
-data BullNet = BullNet
-  { bullHost        :: String
-  , bullPort        :: String
-  , bullStartString :: ByteString
-  }
-  deriving (Eq, Read, Show)
-
-bullMainnet :: String -> BullNet
-bullMainnet host = BullNet
-  { bullHost        = host
-  , bullPort        = "8333"
-  , bullStartString = mainnetStartString
-  }
-
-bullTestnet :: String -> BullNet
-bullTestnet host = BullNet
-  { bullHost = host
-  , bullPort = "18333"
-  , bullStartString = testnetStartString
-  }
 
 data BullPayload
   = BmpVersion BullVersionMsg
@@ -261,7 +222,7 @@ mkPongMsg
   -> Word64 -- ^ nonce
   -> BullMessage
 mkPongMsg n nonce = BullMessage
-  { bmHeader  = mkBullMessageHeader (bullStartString n) "pong" payload
+  { bmHeader  = mkBullMessageHeader (netStartString n) "pong" payload
   , bmPayload = payload
   }
   where
@@ -276,7 +237,7 @@ sendPongMsg hndl = sendBullMessage hndl . mkPongMsg (net hndl)
 -- | verack message constructor
 mkVerackMsg :: BullNet -> BullMessage
 mkVerackMsg n = BullMessage
-  { bmHeader  = mkBullMessageHeader (bullStartString n) "verack" mempty
+  { bmHeader  = mkBullMessageHeader (netStartString n) "verack" mempty
   , bmPayload = mempty
   }
 
@@ -326,16 +287,9 @@ mkVersionMsg :: BullNet -> IO BullMessage
 mkVersionMsg n = do
   payload <- encode <$> mkVersionPayload n
   return BullMessage
-    { bmHeader  = mkBullMessageHeader (bullStartString n) "version" payload
+    { bmHeader  = mkBullMessageHeader (netStartString n) "version" payload
     , bmPayload = payload
     }
-
-bullIPv6 :: BullNet -> ByteString
-bullIPv6 n = L.pack $ fromIntegral <$> fromIPv6b ip
-  where
-    ip = case read $ bullHost n of
-           IPv4 v4 -> ipv4ToIPv6 v4
-           IPv6 v6 -> v6
 
 mkVersionPayload :: BullNet -> IO BullVersionMsg
 mkVersionPayload n = do
@@ -345,11 +299,11 @@ mkVersionPayload n = do
     , bvmServices       = 0x00
     , bvmTimestamp      = ts
     , bvmAddrRxSvc      = 0x00
-    , bvmAddrRxIp       = bullIPv6 n
-    , bvmAddrRxPort     = read (bullPort n)
+    , bvmAddrRxIp       = netIPv6 n
+    , bvmAddrRxPort     = read (netPort n)
     , bvmAddrTxSvc      = 0x00
     , bvmAddrTxIp       = loopback
-    , bvmAddrTxPort     = read (bullPort n)
+    , bvmAddrTxPort     = read (netPort n)
     , bvmNonce          = 0
     , bvmUserAgentBytes = 0
     , bvmUserAgent      = mempty

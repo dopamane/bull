@@ -22,6 +22,7 @@ library
     Bull.Message
     Bull.Message.CompactSize
     Bull.Message.Version
+    Bull.Net
     Bull.Pretty
   build-depends:
     async,

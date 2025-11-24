@@ -3,7 +3,7 @@ module Bull.Cli
   , BullCli(..)
   ) where
 
-import Bull.Message
+import Bull.Net
 import Options.Applicative
 
 data BullCli
@@ -29,6 +29,6 @@ bullClientCliParser = BullClientCli <$> netParser
 
 netParser :: Parser BullNet
 netParser = asum
-  [ bullMainnet <$> strOption (long "mainnet" <> metavar "HOST")
-  , bullTestnet <$> strOption (long "testnet" <> metavar "HOST")
+  [ mainnet <$> strOption (long "mainnet" <> metavar "HOST")
+  , testnet <$> strOption (long "testnet" <> metavar "HOST")
   ]
