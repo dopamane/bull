@@ -25,8 +25,7 @@ runClient :: String -> String -> IO ()
 runClient host port = withBullClient $ \client -> do
   connectBullClient client host port
   withBullMessage client BullMainnet $ \msgr ->
-    logBullMessages msgr $
-      withBullPingPong msgr $ do
+    logBullMessages msgr $ do
         print . pretty =<< bvm
         putStrLn "sending version message"
         recvBullMessage msgr $ \msgIO -> do

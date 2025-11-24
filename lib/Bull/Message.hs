@@ -12,7 +12,7 @@ module Bull.Message
   , mkPongMsg
   , mkVerackMsg
   , sendVerackMsg
-  , withBullPingPong
+  , versionHandshake
   , BullNet(..)
   , bullStartString
   , bullPort
@@ -73,7 +73,9 @@ recvBullMessage hndl k = do
 
 runBullMessage :: BullMessageHandle -> IO a
 runBullMessage hndl =
-  recvBullClient (client hndl) $ runDecoder hndl mempty
+  withPingPong hndl $
+  recvBullClient (client hndl) $
+    runDecoder hndl mempty
 
 runDecoder :: BullMessageHandle -> ByteString -> IO ByteString -> IO a
 runDecoder hndl bs bsIO = loop $ runGetIncremental get
@@ -356,15 +358,21 @@ putBullPayload p = case p of
 
 -- | construct a pong message from the nonce of a ping
 mkPongMsg
-  :: ByteString -- ^ start string
-  -> Word64     -- ^ nonce
+  :: BullNet
+  -> Word64 -- ^ nonce
   -> BullMessage
-mkPongMsg startString nonce = BullMessage
-  { bmHeader  = mkBullMessageHeader startString "pong" payload
+mkPongMsg n nonce = BullMessage
+  { bmHeader  = mkBullMessageHeader (bullStartString n) "pong" payload
   , bmPayload = payload
   }
   where
     payload = runPut $ putBullPayload $ BmpPong nonce
+
+sendPongMsg
+  :: BullMessageHandle
+  -> Word64 -- ^ nonce from ping
+  -> IO ()
+sendPongMsg hndl = sendBullMessage hndl . mkPongMsg (net hndl)
 
 -- | verack message constructor
 mkVerackMsg :: BullNet -> BullMessage
@@ -377,15 +385,15 @@ sendVerackMsg :: BullMessageHandle -> IO ()
 sendVerackMsg hndl = sendBullMessage hndl $ mkVerackMsg $ net hndl
 
 -- | respond to each ping with a pong
-withBullPingPong :: BullMessageHandle -> IO a -> IO a
-withBullPingPong hndl = fmap (either id id) . race loop
+withPingPong :: BullMessageHandle -> IO a -> IO a
+withPingPong hndl = fmap (either id id) . race loop
   where
     loop = recvBullMessage hndl $ \msgIO ->
       forever $ do
         payload <- toBullPayload <$> msgIO
         case payload of
-          BmpPing nonce -> do
-            let pong = mkPongMsg (bullStartString $ net hndl) nonce
-            print $ pretty "sending:" <+> pretty pong <+> pretty nonce
-            sendBullMessage hndl pong
+          BmpPing nonce -> sendPongMsg hndl nonce
           _ -> return ()
+
+versionHandshake :: BullMessageHandle -> IO ()
+versionHandshake = undefined
