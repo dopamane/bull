@@ -33,7 +33,7 @@ runClient host port = withBullClient $ \client -> do
           sendBullMessage msgr =<< verMsg
           _ <- msgIO
           _ <- msgIO
-          sendBullMessage msgr $ mkVerackMsg mainnetStartString
+          sendVerackMsg msgr
         forever $ threadDelay maxBound
 
 verMsg :: IO BullMessage

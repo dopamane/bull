@@ -11,6 +11,7 @@ module Bull.Message
   , BullVersionMsg(..)
   , mkPongMsg
   , mkVerackMsg
+  , sendVerackMsg
   , withBullPingPong
   , BullNet(..)
   , bullStartString
@@ -366,13 +367,14 @@ mkPongMsg startString nonce = BullMessage
     payload = runPut $ putBullPayload $ BmpPong nonce
 
 -- | verack message constructor
-mkVerackMsg
-  :: ByteString -- ^ start string
-  -> BullMessage
-mkVerackMsg startString = BullMessage
-  { bmHeader  = mkBullMessageHeader startString "verack" mempty
+mkVerackMsg :: BullNet -> BullMessage
+mkVerackMsg n = BullMessage
+  { bmHeader  = mkBullMessageHeader (bullStartString n) "verack" mempty
   , bmPayload = mempty
   }
+
+sendVerackMsg :: BullMessageHandle -> IO ()
+sendVerackMsg hndl = sendBullMessage hndl $ mkVerackMsg $ net hndl
 
 -- | respond to each ping with a pong
 withBullPingPong :: BullMessageHandle -> IO a -> IO a
