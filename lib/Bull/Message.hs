@@ -3,6 +3,7 @@ module Bull.Message
   , withBullMessage
   , sendBullMessage
   , recvBullMessage
+  , withPingPong
   , BullMessage(..)
   , BullMessageHeader(..)
   , mkBullMessageHeader
@@ -73,10 +74,7 @@ recvBullMessage hndl k = do
   k $ atomically $ readTChan c
 
 runBullMessage :: BullMessageHandle -> IO a
-runBullMessage hndl =
-  withPingPong hndl $
-  recvBullClient (client hndl) $
-    runDecoder hndl mempty
+runBullMessage hndl = recvBullClient (client hndl) $ runDecoder hndl mempty
 
 runDecoder :: BullMessageHandle -> ByteString -> IO ByteString -> IO a
 runDecoder hndl bs bsIO = loop $ runGetIncremental get
@@ -403,10 +401,27 @@ withPingPong hndl = fmap (either id id) . race loop
 versionHandshake :: BullMessageHandle -> IO ()
 versionHandshake hndl = recvBullMessage hndl $ \msgIO -> do
   sendVersionMsg hndl
-  _ <- msgIO
+  recvVersionMsg msgIO
+  recvVerackMsg msgIO
   sendVerackMsg hndl
-  _ <- msgIO
-  return ()
+
+recvVersionMsg :: IO BullMessage -> IO ()
+recvVersionMsg msgIO = loop
+  where
+    loop = do
+      payload <- toBullPayload <$> msgIO
+      case payload of
+        BmpVersion{} -> return ()
+        _            -> loop
+
+recvVerackMsg :: IO BullMessage -> IO ()
+recvVerackMsg msgIO = loop
+  where
+    loop = do
+      payload <- toBullPayload <$> msgIO
+      case payload of
+        BmpVerack -> return ()
+        _         -> loop
 
 sendVersionMsg :: BullMessageHandle -> IO ()
 sendVersionMsg hndl = sendBullMessage hndl =<< mkVersionMsg (net hndl)

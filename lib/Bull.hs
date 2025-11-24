@@ -22,7 +22,7 @@ runClient net = withBullClient $ \client -> do
   withBullMessage client net $ \msgr ->
     logBullMessages msgr $ do
         versionHandshake msgr
-        forever $ threadDelay maxBound
+        withPingPong msgr $ forever $ threadDelay maxBound
 
 logBullMessages :: BullMessageHandle -> IO a -> IO a
 logBullMessages hndl = fmap (either id id) . race loop
