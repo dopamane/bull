@@ -1,6 +1,5 @@
 module Bull.Message
   ( BullMessageHandle
-  , bullStartString
   , withBullMessage
   , sendBullMessage
   , recvBullMessage
@@ -13,6 +12,9 @@ module Bull.Message
   , mkPongMsg
   , mkVerackMsg
   , withBullPingPong
+  , BullNet(..)
+  , bullStartString
+  , bullPort
   , mainnetStartString
   , testnetStartString
   ) where
@@ -36,25 +38,25 @@ import Numeric
 import Prettyprinter
 
 data BullMessageHandle = BullMessageHandle
-  { client          :: BullClientHandle
-  , bullStartString :: ByteString -- ^ network start string
-  , frClient        :: TChan BullMessage
+  { client   :: BullClientHandle
+  , net      :: BullNet
+  , frClient :: TChan BullMessage
   }
 
 newBullMessage
   :: BullClientHandle
-  -> ByteString
+  -> BullNet
   -> IO BullMessageHandle
-newBullMessage client' startString' =
-  BullMessageHandle client' startString' <$> newBroadcastTChanIO
+newBullMessage client' net' =
+  BullMessageHandle client' net' <$> newBroadcastTChanIO
 
 withBullMessage
   :: BullClientHandle
-  -> ByteString -- ^ network start string
+  -> BullNet
   -> (BullMessageHandle -> IO a)
   -> IO a
-withBullMessage client' startString' k = do
-  hndl <- newBullMessage client' startString'
+withBullMessage client' net' k = do
+  hndl <- newBullMessage client' net'
   either id id <$> race (runBullMessage hndl) (k hndl)
 
 sendBullMessage :: BullMessageHandle -> BullMessage -> IO ()
@@ -198,6 +200,23 @@ putHeader hdr = do
   putLazyByteString $ bmhCommandName hdr
   putWord32le       $ bmhPayloadSize hdr
   putLazyByteString $ bmhChecksum    hdr
+
+data BullNet
+  = BullMainnet
+  | BullTestnet
+  | BullSomenet String ByteString
+
+bullPort :: BullNet -> String
+bullPort n = case n of
+  BullMainnet     -> "8333"
+  BullTestnet     -> "18333"
+  BullSomenet p _ -> p
+
+bullStartString :: BullNet -> ByteString
+bullStartString n = case n of
+  BullMainnet     -> mainnetStartString
+  BullTestnet     -> testnetStartString
+  BullSomenet _ s -> s
 
 data BullVersionMsg = BullVersionMsg
   { bvmVersion        :: Int32
@@ -364,7 +383,7 @@ withBullPingPong hndl = fmap (either id id) . race loop
         payload <- toBullPayload <$> msgIO
         case payload of
           BmpPing nonce -> do
-            let pong = mkPongMsg (bullStartString hndl) nonce
+            let pong = mkPongMsg (bullStartString $ net hndl) nonce
             print $ pretty "sending:" <+> pretty pong <+> pretty nonce
             sendBullMessage hndl pong
           _ -> return ()

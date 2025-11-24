@@ -24,7 +24,7 @@ bullMain cli = case cli of
 runClient :: String -> String -> IO ()
 runClient host port = withBullClient $ \client -> do
   connectBullClient client host port
-  withBullMessage client mainnetStartString $ \msgr ->
+  withBullMessage client BullMainnet $ \msgr ->
     logBullMessages msgr $
       withBullPingPong msgr $ do
         print . pretty =<< bvm
@@ -52,7 +52,7 @@ bvm = do
     , bvmServices       = 0x00
     , bvmTimestamp      = ts
     , bvmAddrRxSvc      = 0x00
-    , bvmAddrRxIp       = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 162, 120, 69, 182]
+    , bvmAddrRxIp       = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 206, 206, 109, 24]
     , bvmAddrRxPort     = 8333
     , bvmAddrTxSvc      = 0x00
     , bvmAddrTxIp       = loopback
