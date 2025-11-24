@@ -3,10 +3,11 @@ module Bull.Cli
   , BullCli(..)
   ) where
 
+import Bull.Message
 import Options.Applicative
 
 data BullCli
-  = BullClientCli String String
+  = BullClientCli BullNet
   deriving (Eq, Read, Show)
 
 bullCli :: IO BullCli
@@ -24,17 +25,10 @@ bullCliParser = hsubparser $ mconcat
   ]
 
 bullClientCliParser :: Parser BullCli
-bullClientCliParser =
-  BullClientCli
-    <$> hostParser
-    <*> portParser
+bullClientCliParser = BullClientCli <$> netParser
 
-hostParser :: Parser String
-hostParser = strOption $ long "host"
-
-portParser :: Parser String
-portParser = asum
-  [ strOption     $ long "port"
-  , flag' "8333"  $ long "mainnet"
-  , flag' "18333" $ long "testnet"
+netParser :: Parser BullNet
+netParser = asum
+  [ bullMainnet <$> strOption (long "mainnet" <> metavar "HOST")
+  , bullTestnet <$> strOption (long "testnet" <> metavar "HOST")
   ]

@@ -14,10 +14,8 @@ module Bull.Message
   , sendVerackMsg
   , versionHandshake
   , BullNet(..)
-  , bullStartString
-  , bullPort
-  , mainnetStartString
-  , testnetStartString
+  , bullMainnet
+  , bullTestnet
   ) where
 
 import Bull.Client
@@ -35,8 +33,10 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Digest.Pure.SHA
 import Data.Function
 import Data.Int
+import Foreign.C
 import Numeric
 import Prettyprinter
+import System.Posix
 
 data BullMessageHandle = BullMessageHandle
   { client   :: BullClientHandle
@@ -204,22 +204,26 @@ putHeader hdr = do
   putWord32le       $ bmhPayloadSize hdr
   putLazyByteString $ bmhChecksum    hdr
 
-data BullNet
-  = BullMainnet
-  | BullTestnet
-  | BullSomenet String ByteString
+data BullNet = BullNet
+  { bullHost        :: String
+  , bullPort        :: String
+  , bullStartString :: ByteString
+  }
+  deriving (Eq, Read, Show)
 
-bullPort :: BullNet -> String
-bullPort n = case n of
-  BullMainnet     -> "8333"
-  BullTestnet     -> "18333"
-  BullSomenet p _ -> p
+bullMainnet :: String -> BullNet
+bullMainnet host = BullNet
+  { bullHost        = host
+  , bullPort        = "8333"
+  , bullStartString = mainnetStartString
+  }
 
-bullStartString :: BullNet -> ByteString
-bullStartString n = case n of
-  BullMainnet     -> mainnetStartString
-  BullTestnet     -> testnetStartString
-  BullSomenet _ s -> s
+bullTestnet :: String -> BullNet
+bullTestnet host = BullNet
+  { bullHost = host
+  , bullPort = "18333"
+  , bullStartString = testnetStartString
+  }
 
 data BullVersionMsg = BullVersionMsg
   { bvmVersion        :: Int32
@@ -268,7 +272,7 @@ instance Binary BullVersionMsg where
 
 getBullVersionMsg :: Get BullVersionMsg
 getBullVersionMsg = do
-  version        <- getInt32le
+  versn          <- getInt32le
   services       <- getWord64le
   timestamp      <- getInt64le
   rxSvc          <- getWord64le
@@ -283,7 +287,7 @@ getBullVersionMsg = do
   startHeight    <- getInt32le
   relayM         <- optional get
   return BullVersionMsg
-    { bvmVersion        = version
+    { bvmVersion        = versn
     , bvmServices       = services
     , bvmTimestamp      = timestamp
     , bvmAddrRxSvc      = rxSvc
@@ -396,4 +400,46 @@ withPingPong hndl = fmap (either id id) . race loop
           _ -> return ()
 
 versionHandshake :: BullMessageHandle -> IO ()
-versionHandshake = undefined
+versionHandshake hndl = recvBullMessage hndl $ \msgIO -> do
+  sendVersionMsg hndl
+  _ <- msgIO
+  sendVerackMsg hndl
+  _ <- msgIO
+  return ()
+
+sendVersionMsg :: BullMessageHandle -> IO ()
+sendVersionMsg hndl = sendBullMessage hndl =<< mkVersionMsg (net hndl)
+
+mkVersionMsg :: BullNet -> IO BullMessage
+mkVersionMsg n = do
+  payload <- encode <$> mkVersionPayload n rxIp
+  return BullMessage
+    { bmHeader  = mkBullMessageHeader (bullStartString n) "version" payload
+    , bmPayload = payload
+    }
+  where
+    rxIp = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 206, 206, 109, 24]
+
+mkVersionPayload :: BullNet -> ByteString -> IO BullVersionMsg
+mkVersionPayload n host = do
+  CTime ts <- epochTime
+  return BullVersionMsg
+    { bvmVersion        = 70015
+    , bvmServices       = 0x00
+    , bvmTimestamp      = ts
+    , bvmAddrRxSvc      = 0x00
+    , bvmAddrRxIp       = host
+    , bvmAddrRxPort     = read (bullPort n)
+    , bvmAddrTxSvc      = 0x00
+    , bvmAddrTxIp       = loopback
+    , bvmAddrTxPort     = read (bullPort n)
+    , bvmNonce          = 0
+    , bvmUserAgentBytes = 0
+    , bvmUserAgent      = mempty
+    , bvmStartHeight    = 0
+    , bvmRelay          = Nothing
+    }
+
+-- | ipv6 @::ffff:127.0.0.1@
+loopback :: ByteString
+loopback = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 0x7f, 0x00, 0x00, 0x01]
