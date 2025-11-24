@@ -19,7 +19,7 @@ getCompactSize = do
 putCompactSize :: Integer -> Put
 putCompactSize n
   | 0          <= n && n <= 252                  = putWord8    $ fromIntegral n
-  | 253        <= n && n <= 65535                = putWord16le $ fromIntegral n
-  | 65536      <= n && n <= 4294967295           = putWord32le $ fromIntegral n
-  | 4294967296 <= n && n <= 18446744073709551615 = putWord64le $ fromIntegral n
+  | 253        <= n && n <= 65535                = putWord8 0xFD <> putWord16le (fromIntegral n)
+  | 65536      <= n && n <= 4294967295           = putWord8 0xFE <> putWord32le (fromIntegral n)
+  | 4294967296 <= n && n <= 18446744073709551615 = putWord8 0xFF <> putWord64le (fromIntegral n)
   | otherwise                                    = error "size out of range"

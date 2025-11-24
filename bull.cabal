@@ -52,6 +52,14 @@ test-suite test
   hs-source-dirs:   test
   type:             exitcode-stdio-1.0
   main-is:          Main.hs
+  other-modules:
+    Test.Bull
+    Test.Bull.Message
+    Test.Bull.Message.CompactSize
   build-depends:
     base,
-    bull
+    binary,
+    bull,
+    bytestring,
+    tasty,
+    tasty-hunit
