@@ -2,30 +2,20 @@ module Bull.Message.Version
   ( BullVersionMsg(..)
   ) where
 
-import Bull.Client
+import Bull.Message.CompactSize
 import Bull.Pretty
 import Control.Applicative
-import Control.Concurrent.Async
-import Control.Concurrent.STM
-import Control.Monad
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
-import Data.Bits
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Lazy.Char8 as LC
-import Data.Digest.Pure.SHA
-import Data.Function
-import Data.IP
 import Data.Int
-import Foreign.C
-import Numeric
 import Prettyprinter
-import System.Posix
 
+-- | Version message
 data BullVersionMsg = BullVersionMsg
-  { bvmVersion        :: Int32
+  { bvmVersion        :: Int32 -- ^ protocol
   , bvmServices       :: Word64
   , bvmTimestamp      :: Int64
   , bvmAddrRxSvc      :: Word64
@@ -35,7 +25,7 @@ data BullVersionMsg = BullVersionMsg
   , bvmAddrTxIp       :: ByteString
   , bvmAddrTxPort     :: Word16
   , bvmNonce          :: Word64
-  , bvmUserAgentBytes :: Word8
+  , bvmUserAgentBytes :: Integer -- ^ compact size
   , bvmUserAgent      :: ByteString
   , bvmStartHeight    :: Int32
   , bvmRelay          :: Maybe Bool
@@ -81,7 +71,7 @@ getBullVersionMsg = do
   txIp           <- getLazyByteString 16
   txPort         <- getWord16be
   nonce          <- getWord64le
-  userAgentBytes <- getWord8
+  userAgentBytes <- getCompactSize
   userAgent      <- getLazyByteString $ fromIntegral userAgentBytes
   startHeight    <- getInt32le
   relayM         <- optional get
@@ -114,7 +104,7 @@ putBullVersionMsg m = do
   putLazyByteString $ bvmAddrTxIp    m
   putWord16be       $ bvmAddrTxPort  m
   putWord64le       $ bvmNonce       m
-  putWord8          $ bvmUserAgentBytes m
+  putCompactSize    $ bvmUserAgentBytes m
   putLazyByteString $ bvmUserAgent   m
   putInt32le        $ bvmStartHeight m
   mapM_ put         $ bvmRelay       m
