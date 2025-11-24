@@ -20,6 +20,8 @@ library
     Bull.Cli
     Bull.Client
     Bull.Message
+    Bull.Message.Version
+    Bull.Pretty
   build-depends:
     async,
     base,
