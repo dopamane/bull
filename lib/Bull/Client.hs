@@ -7,6 +7,7 @@ module Bull.Client
   , recvBullClient
   ) where
 
+import Bull.Log
 import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
@@ -17,15 +18,16 @@ import Network.Socket
 import Network.Socket.ByteString.Lazy
 
 data BullClientHandle = BullClientHandle
-  { host   :: TMVar String
+  { lgr    :: LogHandle
+  , host   :: TMVar String
   , port   :: TMVar String
   , toSock :: TChan ByteString
   , frSock :: TChan ByteString
   }
 
-newBullClient :: IO BullClientHandle
-newBullClient =
-  BullClientHandle
+newBullClient :: LogHandle -> IO BullClientHandle
+newBullClient l =
+  BullClientHandle l
     <$> newEmptyTMVarIO
     <*> newEmptyTMVarIO
     <*> newTChanIO
@@ -48,9 +50,9 @@ recvBullClient hndl k = do
   c <- atomically $ dupTChan $ frSock hndl
   k $ atomically $ readTChan c
 
-withBullClient :: (BullClientHandle -> IO a) -> IO a
-withBullClient k = do
-  hndl <- newBullClient
+withBullClient :: LogHandle -> (BullClientHandle -> IO a) -> IO a
+withBullClient l k = do
+  hndl <- newBullClient l
   either id id <$> race (runBullClient hndl) (k hndl)
 
 runBullClient :: BullClientHandle -> IO a
@@ -61,7 +63,7 @@ runBullClient hndl = join $ atomically $ do
 
 tcpClient :: BullClientHandle -> Socket -> IO a
 tcpClient hndl sock = do
-  putStrLn "running tcp client"
+  say (lgr hndl) "running tcp client"
   either id id <$> race (sending hndl sock) (recving hndl sock)
 
 sending :: BullClientHandle -> Socket -> IO a

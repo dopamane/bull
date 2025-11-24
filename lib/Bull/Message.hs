@@ -16,6 +16,7 @@ module Bull.Message
   ) where
 
 import Bull.Client
+import Bull.Log
 import Bull.Message.Version
 import Bull.Net
 import Bull.Pretty
@@ -35,25 +36,28 @@ import Prettyprinter
 import System.Posix
 
 data BullMessageHandle = BullMessageHandle
-  { client   :: BullClientHandle
+  { lgr      :: LogHandle
+  , client   :: BullClientHandle
   , net      :: BullNet
   , frClient :: TChan BullMessage
   }
 
 newBullMessage
-  :: BullClientHandle
+  :: LogHandle
+  -> BullClientHandle
   -> BullNet
   -> IO BullMessageHandle
-newBullMessage client' net' =
-  BullMessageHandle client' net' <$> newBroadcastTChanIO
+newBullMessage lgr' client' net' =
+  BullMessageHandle lgr' client' net' <$> newBroadcastTChanIO
 
 withBullMessage
-  :: BullClientHandle
+  :: LogHandle
+  -> BullClientHandle
   -> BullNet
   -> (BullMessageHandle -> IO a)
   -> IO a
-withBullMessage client' net' k = do
-  hndl <- newBullMessage client' net'
+withBullMessage lgr' client' net' k = do
+  hndl <- newBullMessage lgr' client' net'
   either id id <$> race (runBullMessage hndl) (k hndl)
 
 sendBullMessage :: BullMessageHandle -> BullMessage -> IO ()
@@ -68,7 +72,9 @@ recvBullMessage hndl k = do
   k $ atomically $ readTChan c
 
 runBullMessage :: BullMessageHandle -> IO a
-runBullMessage hndl = recvBullClient (client hndl) $ runDecoder hndl mempty
+runBullMessage hndl = recvBullClient (client hndl) $ \bsIO -> do
+  say (lgr hndl) "running message decoder"
+  runDecoder hndl mempty bsIO
 
 runDecoder :: BullMessageHandle -> ByteString -> IO ByteString -> IO a
 runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl

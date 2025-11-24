@@ -19,6 +19,7 @@ library
     Bull
     Bull.Cli
     Bull.Client
+    Bull.Log
     Bull.Message
     Bull.Message.CompactSize
     Bull.Message.Version
