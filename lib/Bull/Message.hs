@@ -7,9 +7,6 @@ module Bull.Message
   , BullMessage(..)
   , BullPayload(..)
   , toBullPayload
-  , mkPongMsg
-  , mkVerackMsg
-  , sendVerackMsg
   , versionHandshake
   ) where
 
@@ -187,7 +184,8 @@ sendVerackMsg hndl = sendBullMessage hndl $ mkVerackMsg $ net hndl
 withPingPong :: BullMessageHandle -> IO a -> IO a
 withPingPong hndl = fmap (either id id) . race loop
   where
-    loop = recvBullMessage hndl $ \msgIO ->
+    loop = recvBullMessage hndl $ \msgIO -> do
+      say (lgr hndl) "running ping-pong"
       forever $ do
         payload <- toBullPayload <$> msgIO
         case payload of
