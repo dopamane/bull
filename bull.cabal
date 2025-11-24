@@ -20,6 +20,7 @@ library
     Bull.Cli
     Bull.Client
     Bull.Message
+    Bull.Message.CompactSize
     Bull.Message.Version
     Bull.Pretty
   build-depends:
