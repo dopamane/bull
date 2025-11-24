@@ -32,6 +32,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Digest.Pure.SHA
 import Data.Function
+import Data.IP
 import Data.Int
 import Foreign.C
 import Numeric
@@ -412,23 +413,28 @@ sendVersionMsg hndl = sendBullMessage hndl =<< mkVersionMsg (net hndl)
 
 mkVersionMsg :: BullNet -> IO BullMessage
 mkVersionMsg n = do
-  payload <- encode <$> mkVersionPayload n rxIp
+  payload <- encode <$> mkVersionPayload n
   return BullMessage
     { bmHeader  = mkBullMessageHeader (bullStartString n) "version" payload
     , bmPayload = payload
     }
-  where
-    rxIp = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 206, 206, 109, 24]
 
-mkVersionPayload :: BullNet -> ByteString -> IO BullVersionMsg
-mkVersionPayload n host = do
+bullIPv6 :: BullNet -> ByteString
+bullIPv6 n = L.pack $ fromIntegral <$> fromIPv6b ip
+  where
+    ip = case read $ bullHost n of
+           IPv4 v4 -> ipv4ToIPv6 v4
+           IPv6 v6 -> v6
+
+mkVersionPayload :: BullNet -> IO BullVersionMsg
+mkVersionPayload n = do
   CTime ts <- epochTime
   return BullVersionMsg
     { bvmVersion        = 70015
     , bvmServices       = 0x00
     , bvmTimestamp      = ts
     , bvmAddrRxSvc      = 0x00
-    , bvmAddrRxIp       = host
+    , bvmAddrRxIp       = bullIPv6 n
     , bvmAddrRxPort     = read (bullPort n)
     , bvmAddrTxSvc      = 0x00
     , bvmAddrTxIp       = loopback

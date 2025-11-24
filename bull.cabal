@@ -25,6 +25,7 @@ library
     base,
     binary,
     bytestring,
+    iproute,
     network,
     network-run,
     optparse-applicative,
