@@ -19,6 +19,7 @@ library
   exposed-modules:
     Bull
     Bull.Cli
+    Bull.Client
     Bull.Conn
     Bull.Daemon
     Bull.Log
