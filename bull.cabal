@@ -21,6 +21,7 @@ library
     Bull.Client
     Bull.Log
     Bull.Message
+    Bull.Message.Addr
     Bull.Message.CompactSize
     Bull.Message.Header
     Bull.Message.Version
@@ -58,11 +59,14 @@ test-suite test
   other-modules:
     Test.Bull
     Test.Bull.Message
+    Test.Bull.Message.Addr
     Test.Bull.Message.CompactSize
   build-depends:
     base,
     binary,
     bull,
     bytestring,
+    hedgehog,
     tasty,
+    tasty-hedgehog,
     tasty-hunit

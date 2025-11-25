@@ -12,6 +12,7 @@ module Bull.Message
 
 import Bull.Client
 import Bull.Log
+import Bull.Message.Addr
 import Bull.Message.Header
 import Bull.Message.Version
 import Bull.Net
@@ -117,6 +118,7 @@ data BullPayload
   | BmpVerack
   | BmpPing Word64
   | BmpPong Word64
+  | BmpAddr AddrMsg
   | BmpRaw ByteString
   deriving (Eq, Read, Show)
 
@@ -126,6 +128,7 @@ instance Pretty BullPayload where
     BmpVerack    -> pretty "verack"
     BmpPing n    -> pretty "ping" <+> pretty n
     BmpPong n    -> pretty "pong" <+> pretty n
+    BmpAddr a    -> pretty "addr" <+> pretty a
     BmpRaw bs    -> pretty "raw"  <+> prettyBytes bs
 
 getBullPayload :: String -> Get BullPayload
@@ -134,6 +137,7 @@ getBullPayload commandName = case commandName of
   "verack"  -> BmpVerack  <$  eof
   "ping"    -> BmpPing    <$> getWord64le <* eof
   "pong"    -> BmpPong    <$> getWord64le <* eof
+  "addr"    -> BmpAddr    <$> get <* eof
   _         -> BmpRaw     <$> getRemainingLazyByteString
 
 eof :: Get ()
@@ -144,12 +148,14 @@ toBullPayload m = runGet (getBullPayload cmdName) $ bmPayload m
   where
     cmdName = LC.unpack $ L.takeWhile (/= 0x00) $ bmhCommandName $ bmHeader m
 
+-- | encode payload
 putBullPayload :: BullPayload -> Put
 putBullPayload p = case p of
   BmpVersion v -> put v
   BmpVerack    -> return ()
   BmpPing n    -> putWord64le n
   BmpPong n    -> putWord64le n
+  BmpAddr a    -> put a
   BmpRaw bs    -> putLazyByteString bs
 
 -- | construct a pong message from the nonce of a ping

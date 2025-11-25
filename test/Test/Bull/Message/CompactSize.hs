@@ -1,5 +1,5 @@
 module Test.Bull.Message.CompactSize
-  ( test
+  ( tests
   ) where
 
 import Bull.Message.CompactSize
@@ -9,8 +9,8 @@ import qualified Data.ByteString.Lazy as L
 import Test.Tasty
 import Test.Tasty.HUnit
 
-test :: TestTree
-test = testGroup "CompactSize"
+tests :: TestTree
+tests = testGroup "CompactSize"
   [ getCompactSizeTest
   , putCompactSizeTest
   ]
