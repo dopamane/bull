@@ -1,6 +1,6 @@
 module Bull.Log
   ( withLog
-  , LogHandle
+  , Logger
   , say
   ) where
 
@@ -8,15 +8,15 @@ import Control.Concurrent.Async
 import Control.Concurrent.STM
 import Control.Monad
 
-newtype LogHandle = LogHandle (TChan String)
+newtype Logger = Logger (TChan String)
 
-withLog :: (LogHandle -> IO a) -> IO a
+withLog :: (Logger -> IO a) -> IO a
 withLog k = do
-  hndl <- LogHandle <$> newTChanIO
+  hndl <- Logger <$> newTChanIO
   either id id <$> race (runLog hndl) (k hndl)
 
-runLog :: LogHandle -> IO a
-runLog (LogHandle c) = forever $ putStrLn =<< atomically (readTChan c)
+runLog :: Logger -> IO a
+runLog (Logger c) = forever $ putStrLn =<< atomically (readTChan c)
 
-say :: LogHandle -> String -> IO ()
-say (LogHandle c) = atomically . writeTChan c
+say :: Logger -> String -> IO ()
+say (Logger c) = atomically . writeTChan c

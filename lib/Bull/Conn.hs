@@ -1,6 +1,6 @@
 -- | Network connection
 module Bull.Conn
-  ( ConnHandle
+  ( Conn
   , withConn
   , sendMsg
   , recvMsg
@@ -21,20 +21,20 @@ import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 
-data ConnHandle = ConnHandle
+data Conn = Conn
   { net      :: BullNet
-  , lgr      :: LogHandle
+  , lgr      :: Logger
   , sendChan :: TChan Msg
   , recvChan :: TChan Msg
   }
 
-newConn :: BullNet -> LogHandle -> IO ConnHandle
+newConn :: BullNet -> Logger -> IO Conn
 newConn n l =
-  ConnHandle n l
+  Conn n l
     <$> newTChanIO
     <*> newBroadcastTChanIO
 
-withConn :: BullNet -> LogHandle -> (ConnHandle -> IO a) -> IO a
+withConn :: BullNet -> Logger -> (Conn -> IO a) -> IO a
 withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
   hndl <- newConn n l
   runConcurrently $ asum $ map Concurrently
@@ -43,25 +43,25 @@ withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
     , handshake hndl >> withPingPong hndl (k hndl)
     ]
 
-sendMsg :: ConnHandle -> Msg -> IO ()
+sendMsg :: Conn -> Msg -> IO ()
 sendMsg hndl = atomically . writeTChan (sendChan hndl)
 
-recvMsg :: ConnHandle -> (IO Msg -> IO a) -> IO a
+recvMsg :: Conn -> (IO Msg -> IO a) -> IO a
 recvMsg hndl k = do
   recvChan' <- atomically $ dupTChan $ recvChan hndl
   k $ atomically $ readTChan recvChan'
 
-sender :: ConnHandle -> Socket -> IO a
+sender :: Conn -> Socket -> IO a
 sender hndl sock = forever $ do
   msg <- atomically $ readTChan $ sendChan hndl
   sendAll sock $ runPut $ putMessage msg
 
-recver :: ConnHandle -> Socket -> IO a
+recver :: Conn -> Socket -> IO a
 recver hndl sock = do
   say (lgr hndl) "decoding messages"
   runDecoder hndl mempty $ recv sock 4096
 
-runDecoder :: ConnHandle -> ByteString -> IO ByteString -> IO a
+runDecoder :: Conn -> ByteString -> IO ByteString -> IO a
 runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
   where
     loop decoder
@@ -76,7 +76,7 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
            atomically $ writeTChan (recvChan hndl) a
            runDecoder hndl (L.fromStrict bs'') bsIO
 
-withPingPong :: ConnHandle -> IO a -> IO a
+withPingPong :: Conn -> IO a -> IO a
 withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
   where
     pingpong msgIO = do
@@ -87,7 +87,7 @@ withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
           BmpPing nonce -> sendMsg hndl $ pongMsg (net hndl) nonce
           _             -> return ()
 
-handshake :: ConnHandle -> IO ()
+handshake :: Conn -> IO ()
 handshake hndl = recvMsg hndl $ \msgIO -> do
   say (lgr hndl) "starting handshake"
   sendMsg hndl =<< versionMsg (net hndl)

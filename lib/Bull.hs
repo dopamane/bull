@@ -26,7 +26,7 @@ runClient net =
     sendMsg conn $ getAddrMsg net
     forever $ threadDelay maxBound
 
-logMessages :: LogHandle -> ConnHandle -> IO a -> IO a
+logMessages :: Logger -> Conn -> IO a -> IO a
 logMessages lgr conn = fmap (either id id) . race loop
   where
     loop = recvMsg conn $ \msgIO ->
