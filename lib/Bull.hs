@@ -5,7 +5,7 @@ module Bull
   ) where
 
 import Bull.Cli
-import Bull.Client
+import Bull.Conn
 import Bull.Log
 import Bull.Message
 import Bull.Net
@@ -21,19 +21,15 @@ bullMain cli = case cli of
 runClient :: BullNet -> IO ()
 runClient net =
   withLog $ \lgr ->
-  withBullClient lgr $ \client -> do
-    connectBullClient client (netHost net) (netPort net)
-    withBullMessage lgr client net $ \msgr ->
-      logBullMessages lgr msgr $ do
-        versionHandshake msgr
-        withPingPong msgr $ do
-          sendGetAddrMsg msgr
-          forever $ threadDelay maxBound
+  withConn net lgr $ \conn ->
+  logMessages lgr conn $ do
+    sendMsg conn $ getAddrMsg net
+    forever $ threadDelay maxBound
 
-logBullMessages :: LogHandle -> BullMessageHandle -> IO a -> IO a
-logBullMessages lgr msgr = fmap (either id id) . race loop
+logMessages :: LogHandle -> ConnHandle -> IO a -> IO a
+logMessages lgr conn = fmap (either id id) . race loop
   where
-    loop = recvBullMessage msgr $ \msgIO ->
+    loop = recvMsg conn $ \msgIO ->
       forever $ do
         msg <- msgIO
         say lgr $ show $ vsep

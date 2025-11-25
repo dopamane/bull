@@ -22,21 +22,21 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 
 data ConnHandle = ConnHandle
-  { lgr      :: LogHandle
-  , net      :: BullNet
+  { net      :: BullNet
+  , lgr      :: LogHandle
   , sendChan :: TChan BullMessage
   , recvChan :: TChan BullMessage
   }
 
-newConn :: LogHandle -> BullNet -> IO ConnHandle
-newConn l n =
-  ConnHandle l n
+newConn :: BullNet -> LogHandle -> IO ConnHandle
+newConn n l =
+  ConnHandle n l
     <$> newTChanIO
     <*> newBroadcastTChanIO
 
-withConn :: LogHandle -> BullNet -> (ConnHandle -> IO a) -> IO a
-withConn l n k = runTCPClient (netHost n) (netPort n) $ \sock -> do
-  hndl <- newConn l n
+withConn :: BullNet -> LogHandle -> (ConnHandle -> IO a) -> IO a
+withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
+  hndl <- newConn n l
   runConcurrently $ asum $ map Concurrently
     [ sender hndl sock
     , recver hndl sock
@@ -58,7 +58,7 @@ sender hndl sock = forever $ do
 
 recver :: ConnHandle -> Socket -> IO a
 recver hndl sock = do
-  say (lgr hndl) "decoding"
+  say (lgr hndl) "decoding messages"
   runDecoder hndl mempty $ recv sock 4096
 
 runDecoder :: ConnHandle -> ByteString -> IO ByteString -> IO a
@@ -77,9 +77,9 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
            runDecoder hndl (L.fromStrict bs'') bsIO
 
 withPingPong :: ConnHandle -> IO a -> IO a
-withPingPong hndl = fmap (either id id) . race go
+withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
   where
-    go = recvMsg hndl $ \msgIO -> do
+    pingpong msgIO = do
       say (lgr hndl) "ping pong"
       forever $ do
         payload <- toBullPayload <$> msgIO
@@ -89,6 +89,7 @@ withPingPong hndl = fmap (either id id) . race go
 
 handshake :: ConnHandle -> IO ()
 handshake hndl = recvMsg hndl $ \msgIO -> do
+  say (lgr hndl) "starting handshake"
   sendMsg hndl =<< versionMsg (net hndl)
   versonPayload <- toBullPayload <$> msgIO
   case versonPayload of
@@ -99,3 +100,4 @@ handshake hndl = recvMsg hndl $ \msgIO -> do
     BmpVerack -> return ()
     _         -> fail "expected verack"
   sendMsg hndl $ verackMsg $ net hndl
+  say (lgr hndl) "handshake complete"

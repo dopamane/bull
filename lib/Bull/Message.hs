@@ -14,6 +14,7 @@ module Bull.Message
   , pongMsg
   , versionMsg
   , verackMsg
+  , getAddrMsg
   ) where
 
 import Bull.Client
