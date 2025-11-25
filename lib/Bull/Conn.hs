@@ -7,7 +7,7 @@ module Bull.Conn
   ) where
 
 import Bull.Log
-import Bull.Message
+import Bull.Message hiding (withPingPong)
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -40,7 +40,7 @@ withConn l n k = runTCPClient (netHost n) (netPort n) $ \sock -> do
   runConcurrently $ asum $ map Concurrently
     [ sender hndl sock
     , recver hndl sock
-    , k hndl
+    , handshake hndl >> withPingPong hndl (k hndl)
     ]
 
 sendMsg :: ConnHandle -> BullMessage -> IO ()
@@ -75,3 +75,27 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
          Done bs'' _ a      -> do
            atomically $ writeTChan (recvChan hndl) a
            runDecoder hndl (L.fromStrict bs'') bsIO
+
+withPingPong :: ConnHandle -> IO a -> IO a
+withPingPong hndl = fmap (either id id) . race go
+  where
+    go = recvMsg hndl $ \msgIO -> do
+      say (lgr hndl) "ping pong"
+      forever $ do
+        payload <- toBullPayload <$> msgIO
+        case payload of
+          BmpPing nonce -> sendMsg hndl $ pongMsg (net hndl) nonce
+          _             -> return ()
+
+handshake :: ConnHandle -> IO ()
+handshake hndl = recvMsg hndl $ \msgIO -> do
+  sendMsg hndl =<< versionMsg (net hndl)
+  versonPayload <- toBullPayload <$> msgIO
+  case versonPayload of
+    BmpVersion{} -> return ()
+    _            -> fail "expected version"
+  verackPayload <- toBullPayload <$> msgIO
+  case verackPayload of
+    BmpVerack -> return ()
+    _         -> fail "expected verack"
+  sendMsg hndl $ verackMsg $ net hndl

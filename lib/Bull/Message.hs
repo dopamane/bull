@@ -11,6 +11,9 @@ module Bull.Message
   , sendGetAddrMsg
   , getMessage
   , putMessage
+  , pongMsg
+  , versionMsg
+  , verackMsg
   ) where
 
 import Bull.Client
@@ -164,11 +167,11 @@ putBullPayload p = case p of
   BmpRaw bs    -> putLazyByteString bs
 
 -- | construct a pong message from the nonce of a ping
-mkPongMsg
+pongMsg
   :: BullNet
   -> Word64 -- ^ nonce
   -> BullMessage
-mkPongMsg n nonce = BullMessage
+pongMsg n nonce = BullMessage
   { bmHeader  = mkBullMessageHeader (netStartString n) "pong" payload
   , bmPayload = payload
   }
@@ -179,14 +182,14 @@ sendPongMsg
   :: BullMessageHandle
   -> Word64 -- ^ nonce from ping
   -> IO ()
-sendPongMsg hndl = sendBullMessage hndl . mkPongMsg (net hndl)
+sendPongMsg hndl = sendBullMessage hndl . pongMsg (net hndl)
 
 -- | verack message constructor
-mkVerackMsg :: BullNet -> BullMessage
-mkVerackMsg = emptyMsg "verack"
+verackMsg :: BullNet -> BullMessage
+verackMsg = emptyMsg "verack"
 
 sendVerackMsg :: BullMessageHandle -> IO ()
-sendVerackMsg hndl = sendBullMessage hndl $ mkVerackMsg $ net hndl
+sendVerackMsg hndl = sendBullMessage hndl $ verackMsg $ net hndl
 
 -- | respond to each ping with a pong
 withPingPong :: BullMessageHandle -> IO a -> IO a
