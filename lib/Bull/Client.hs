@@ -1,8 +1,8 @@
 module Bull.Client
   ( Client
   , withClient
-  , sendClient
-  , recvClient
+  , sendRpc
+  , recvRpc
   ) where
 
 import Bull.Log
@@ -42,11 +42,11 @@ withClient host port l k = runTCPClient host port $ \sock -> do
     , k client
     ]
 
-sendClient :: Client -> Rpc -> IO ()
-sendClient client = atomically . writeTChan (sendChan client)
+sendRpc :: Client -> Rpc -> IO ()
+sendRpc client = atomically . writeTChan (sendChan client)
 
-recvClient :: Client -> (IO Rpc -> IO a) -> IO a
-recvClient client k = do
+recvRpc :: Client -> (IO Rpc -> IO a) -> IO a
+recvRpc client k = do
   recvChan' <- atomically $ dupTChan $ recvChan client
   k $ atomically $ readTChan recvChan'
 

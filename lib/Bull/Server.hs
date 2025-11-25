@@ -84,5 +84,4 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
 data Rpc
   = Connect    Net
   | Disconnect Net
-  | Listen     Net
   deriving (Binary, Eq, Generic, Read, Show)

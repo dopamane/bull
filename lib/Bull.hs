@@ -4,8 +4,14 @@ module Bull
   ) where
 
 import Bull.Cli
+import Bull.Client
 import Bull.Daemon
+import Bull.Log
 
 bullMain :: BullCli -> IO ()
 bullMain cli = case cli of
-  DaemonCli net -> daemon net
+  DaemonCli net           -> daemon net
+  ClientCli host port rpc ->
+    withLog $ \lgr ->
+    withClient host port lgr $ \client ->
+      sendRpc client rpc
