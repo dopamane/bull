@@ -1,6 +1,6 @@
 module Bull.Message.Header
-  ( BullMessageHeader(..)
-  , mkBullMessageHeader
+  ( MsgHdr(..)
+  , mkMsgHdr
   , getHeader
   , putHeader
   ) where
@@ -18,7 +18,7 @@ import Data.Digest.Pure.SHA
 import Data.Function
 import Prettyprinter
 
-data BullMessageHeader = BullMessageHeader
+data MsgHdr = MsgHdr
   { bmhStartString :: ByteString
   , bmhCommandName :: ByteString
   , bmhPayloadSize :: Word32
@@ -26,7 +26,7 @@ data BullMessageHeader = BullMessageHeader
   }
   deriving (Eq, Read, Show)
 
-instance Pretty BullMessageHeader where
+instance Pretty MsgHdr where
   pretty hdr = vsep
     [ pretty "header:"
     , indent 2 $ vsep
@@ -38,12 +38,12 @@ instance Pretty BullMessageHeader where
     ]
 
 -- | Message header smart-constructor
-mkBullMessageHeader
+mkMsgHdr
   :: ByteString -- ^ start string 'mainnetStartString'
   -> String     -- ^ command name
   -> ByteString -- ^ payload
-  -> BullMessageHeader
-mkBullMessageHeader startString commandName payload = BullMessageHeader
+  -> MsgHdr
+mkMsgHdr startString commandName payload = MsgHdr
   { bmhStartString = startString
   , bmhCommandName = L.take 12 $ LC.pack commandName <> L.replicate 12 0x00
   , bmhPayloadSize = fromIntegral $ L.length payload
@@ -56,13 +56,13 @@ mkBullMessageHeader startString commandName payload = BullMessageHeader
                  & bytestringDigest
                  & L.take 4
 
-renderCommandName :: BullMessageHeader -> Doc ann
+renderCommandName :: MsgHdr -> Doc ann
 renderCommandName =
   pretty . LC.unpack . L.takeWhile (/= 0x00) . bmhCommandName
 
-getHeader :: BullNet -> Get BullMessageHeader
+getHeader :: BullNet -> Get MsgHdr
 getHeader n =
-  BullMessageHeader
+  MsgHdr
     <$> getStartString n
     <*> getLazyByteString 12
     <*> getWord32le
@@ -75,7 +75,7 @@ getStartString n = do
   when (s /= netStartString n) $ fail "invalid start string"
   return s
 
-putHeader :: BullMessageHeader -> Put
+putHeader :: MsgHdr -> Put
 putHeader hdr = do
   putLazyByteString $ bmhStartString hdr
   putLazyByteString $ bmhCommandName hdr

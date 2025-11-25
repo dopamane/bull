@@ -25,7 +25,7 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import Prettyprinter
 
 data BullMessage = BullMessage
-  { bmHeader  :: BullMessageHeader
+  { bmHeader  :: MsgHdr
   , bmPayload :: ByteString
   }
   deriving (Eq, Read, Show)
@@ -106,7 +106,7 @@ pongMsg
   -> Word64 -- ^ nonce
   -> BullMessage
 pongMsg n nonce = BullMessage
-  { bmHeader  = mkBullMessageHeader (netStartString n) "pong" payload
+  { bmHeader  = mkMsgHdr (netStartString n) "pong" payload
   , bmPayload = payload
   }
   where
@@ -120,7 +120,7 @@ versionMsg :: BullNet -> IO BullMessage
 versionMsg n = do
   payload <- encode <$> mkVersionMsg n
   return BullMessage
-    { bmHeader  = mkBullMessageHeader (netStartString n) "version" payload
+    { bmHeader  = mkMsgHdr (netStartString n) "version" payload
     , bmPayload = payload
     }
 
@@ -130,6 +130,6 @@ getAddrMsg = emptyMsg "getaddr"
 -- | message with no payload
 emptyMsg :: String -> BullNet -> BullMessage
 emptyMsg msg n = BullMessage
-  { bmHeader   = mkBullMessageHeader (netStartString n) msg mempty
+  { bmHeader   = mkMsgHdr (netStartString n) msg mempty
   , bmPayload  = mempty
   }
