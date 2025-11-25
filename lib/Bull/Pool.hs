@@ -63,7 +63,7 @@ connect_ p n = void . connect p n
 
 connection :: Pool -> Net -> (Conn -> IO a) -> TMVar () -> IO (Maybe a)
 connection p n k d =
-  either (const $ Nothing) Just <$> race (killer d) (withConn n (lgr p) k)
+  either (const Nothing) Just <$> race (killer d) (withConn n (lgr p) k)
     `finally` deleteConnection p n
 
 killer :: TMVar () -> IO ()

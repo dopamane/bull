@@ -8,6 +8,7 @@ module Bull.Net
   , netIPv6
   ) where
 
+import Data.Binary
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import Data.Hashable
@@ -20,7 +21,7 @@ data Net = Net
   , netPort        :: String     -- ^ port number
   , netStartString :: ByteString -- ^ net start string
   }
-  deriving (Eq, Generic, Hashable, Read, Show)
+  deriving (Binary, Eq, Generic, Hashable, Read, Show)
 
 -- | Bitcoin mainnet
 mainnet :: String -> Net

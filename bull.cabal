@@ -30,6 +30,7 @@ library
     Bull.Net
     Bull.Pool
     Bull.Pretty
+    Bull.Server
   build-depends:
     async,
     base,
