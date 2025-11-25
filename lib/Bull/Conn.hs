@@ -22,19 +22,19 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 
 data Conn = Conn
-  { net      :: BullNet
+  { net      :: Net
   , lgr      :: Logger
   , sendChan :: TChan Msg
   , recvChan :: TChan Msg
   }
 
-newConn :: BullNet -> Logger -> IO Conn
+newConn :: Net -> Logger -> IO Conn
 newConn n l =
   Conn n l
     <$> newTChanIO
     <*> newBroadcastTChanIO
 
-withConn :: BullNet -> Logger -> (Conn -> IO a) -> IO a
+withConn :: Net -> Logger -> (Conn -> IO a) -> IO a
 withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
   hndl <- newConn n l
   runConcurrently $ asum $ map Concurrently

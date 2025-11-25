@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric  #-}
 
 module Bull.Net
-  ( BullNet(..)
+  ( Net(..)
   , mainnet
   , testnet
   , netIPv6
@@ -15,7 +15,7 @@ import Data.IP
 import GHC.Generics
 
 -- | Network connection descriptor
-data BullNet = BullNet
+data Net = Net
   { netHost        :: String     -- ^ host address
   , netPort        :: String     -- ^ port number
   , netStartString :: ByteString -- ^ net start string
@@ -23,16 +23,16 @@ data BullNet = BullNet
   deriving (Eq, Generic, Hashable, Read, Show)
 
 -- | Bitcoin mainnet
-mainnet :: String -> BullNet
-mainnet host       = BullNet
+mainnet :: String -> Net
+mainnet host       = Net
   { netHost        = host
   , netPort        = "8333"
   , netStartString = mainnetStartString
   }
 
 -- | Bitcoin testnet
-testnet :: String -> BullNet
-testnet host       = BullNet
+testnet :: String -> Net
+testnet host       = Net
   { netHost        = host
   , netPort        = "18333"
   , netStartString = testnetStartString
@@ -45,7 +45,7 @@ testnetStartString :: ByteString
 testnetStartString = L.pack [0x0B, 0x11, 0x09, 0x07]
 
 -- | Convert host address to IPv6 address then serialize to bytestring big-endian
-netIPv6 :: BullNet -> ByteString
+netIPv6 :: Net -> ByteString
 netIPv6 n = L.pack $ fromIntegral <$> fromIPv6b ip
   where
     ip = case read $ netHost n of

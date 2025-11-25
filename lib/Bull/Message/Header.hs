@@ -60,7 +60,7 @@ renderCommandName :: MsgHdr -> Doc ann
 renderCommandName =
   pretty . LC.unpack . L.takeWhile (/= 0x00) . bmhCommandName
 
-getHeader :: BullNet -> Get MsgHdr
+getHeader :: Net -> Get MsgHdr
 getHeader n =
   MsgHdr
     <$> getStartString n
@@ -69,7 +69,7 @@ getHeader n =
     <*> getLazyByteString 4
 
 -- | validate start string
-getStartString :: BullNet -> Get ByteString
+getStartString :: Net -> Get ByteString
 getStartString n = do
   s <- getLazyByteString 4
   when (s /= netStartString n) $ fail "invalid start string"

@@ -113,7 +113,7 @@ putBullVersionMsg m = do
   putInt32le        $ bvmStartHeight m
   mapM_ put         $ bvmRelay       m
 
-mkVersionMsg :: BullNet -> IO BullVersionMsg
+mkVersionMsg :: Net -> IO BullVersionMsg
 mkVersionMsg n = do
   CTime ts <- epochTime
   return BullVersionMsg

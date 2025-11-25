@@ -12,7 +12,7 @@ import Control.Concurrent.Async
 import Control.Monad
 import Prettyprinter
 
-daemon :: BullNet -> IO ()
+daemon :: Net -> IO ()
 daemon net =
   withLog $ \lgr -> do
     say lgr "$$$ ₿itcoin ₿ull! $$$"

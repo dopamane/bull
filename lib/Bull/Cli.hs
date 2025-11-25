@@ -7,7 +7,7 @@ import Bull.Net
 import Options.Applicative
 
 newtype BullCli
-  = DaemonCli BullNet
+  = DaemonCli Net
   deriving (Eq, Read, Show)
 
 bullCli :: IO BullCli
@@ -27,7 +27,7 @@ bullCliParser = hsubparser $ mconcat
 daemonCliParser :: Parser BullCli
 daemonCliParser = DaemonCli <$> netParser
 
-netParser :: Parser BullNet
+netParser :: Parser Net
 netParser = asum
   [ mainnet <$> strOption (long "mainnet" <> metavar "HOST")
   , testnet <$> strOption (long "testnet" <> metavar "HOST")

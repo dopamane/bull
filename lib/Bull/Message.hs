@@ -40,7 +40,7 @@ instance Pretty Msg where
       ]
     ]
 
-getMessage :: BullNet -> Get Msg
+getMessage :: Net -> Get Msg
 getMessage n = do
   hdr <- getHeader n
   let size = fromIntegral $ bmhPayloadSize hdr
@@ -102,7 +102,7 @@ putBullPayload p = case p of
 
 -- | construct a pong message from the nonce of a ping
 pongMsg
-  :: BullNet
+  :: Net
   -> Word64 -- ^ nonce
   -> Msg
 pongMsg n nonce = Msg
@@ -113,10 +113,10 @@ pongMsg n nonce = Msg
     payload = runPut $ putBullPayload $ BmpPong nonce
 
 -- | verack message constructor
-verackMsg :: BullNet -> Msg
+verackMsg :: Net -> Msg
 verackMsg = emptyMsg "verack"
 
-versionMsg :: BullNet -> IO Msg
+versionMsg :: Net -> IO Msg
 versionMsg n = do
   payload <- encode <$> mkVersionMsg n
   return Msg
@@ -124,11 +124,11 @@ versionMsg n = do
     , bmPayload = payload
     }
 
-getAddrMsg :: BullNet -> Msg
+getAddrMsg :: Net -> Msg
 getAddrMsg = emptyMsg "getaddr"
 
 -- | message with no payload
-emptyMsg :: String -> BullNet -> Msg
+emptyMsg :: String -> Net -> Msg
 emptyMsg msg n = Msg
   { bmHeader   = mkMsgHdr (netStartString n) msg mempty
   , bmPayload  = mempty

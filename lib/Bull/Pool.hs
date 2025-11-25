@@ -23,7 +23,7 @@ data Pool = Pool
   { maxConns :: Int
   , lgr      :: Logger
   , ioChan   :: TChan (IO ())
-  , ioMap    :: TVar (HashMap BullNet (TMVar ()))
+  , ioMap    :: TVar (HashMap Net (TMVar ()))
   }
 
 newPool :: Int -> Logger -> IO Pool
@@ -41,7 +41,7 @@ withPool i l k = do
 worker :: Pool -> IO a
 worker = forever . join . atomically . readTChan . ioChan
 
-connect :: Pool -> BullNet -> (Conn -> IO a) -> IO (IO (Maybe a))
+connect :: Pool -> Net -> (Conn -> IO a) -> IO (IO (Maybe a))
 connect p net k = atomically $ do
   m <- readTVar $ ioMap p
   when (M.size m >= maxConns p) $ throwSTM $ userError "exceeds max connections"
@@ -58,10 +58,10 @@ connect p net k = atomically $ do
         Left  e -> throwIO (e :: SomeException)
         Right a -> return a
 
-connect_ :: Pool -> BullNet -> (Conn -> IO a) -> IO ()
+connect_ :: Pool -> Net -> (Conn -> IO a) -> IO ()
 connect_ p n = void . connect p n
 
-connection :: Pool -> BullNet -> (Conn -> IO a) -> TMVar () -> IO (Maybe a)
+connection :: Pool -> Net -> (Conn -> IO a) -> TMVar () -> IO (Maybe a)
 connection p n k d =
   either (const $ Nothing) Just <$> race (killer d) (withConn n (lgr p) k)
     `finally` deleteConnection p n
@@ -69,13 +69,13 @@ connection p n k d =
 killer :: TMVar () -> IO ()
 killer d = atomically $ check =<< isEmptyTMVar d
 
-deleteConnection :: Pool -> BullNet -> IO ()
+deleteConnection :: Pool -> Net -> IO ()
 deleteConnection p n = atomically $ modifyTVar' (ioMap p) $ M.delete n
 
-disconnect :: Pool -> BullNet -> IO ()
+disconnect :: Pool -> Net -> IO ()
 disconnect p n = atomically $ do
   m <- readTVar $ ioMap p
   mapM_ takeTMVar $ M.lookup n m
 
-connected :: Pool -> BullNet -> STM Bool
+connected :: Pool -> Net -> STM Bool
 connected p n = M.member n <$> readTVar (ioMap p)
