@@ -20,6 +20,7 @@ library
     Bull
     Bull.Cli
     Bull.Conn
+    Bull.Daemon
     Bull.Log
     Bull.Message
     Bull.Message.Addr

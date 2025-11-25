@@ -7,7 +7,7 @@ import Bull.Net
 import Options.Applicative
 
 newtype BullCli
-  = BullClientCli BullNet
+  = DaemonCli BullNet
   deriving (Eq, Read, Show)
 
 bullCli :: IO BullCli
@@ -21,11 +21,11 @@ bullCli = customExecParser prefs' $
 
 bullCliParser :: Parser BullCli
 bullCliParser = hsubparser $ mconcat
-  [ command "client" $ info bullClientCliParser mempty
+  [ command "daemon" $ info daemonCliParser mempty
   ]
 
-bullClientCliParser :: Parser BullCli
-bullClientCliParser = BullClientCli <$> netParser
+daemonCliParser :: Parser BullCli
+daemonCliParser = DaemonCli <$> netParser
 
 netParser :: Parser BullNet
 netParser = asum
