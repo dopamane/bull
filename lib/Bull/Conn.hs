@@ -24,8 +24,8 @@ import qualified Data.ByteString.Lazy as L
 data ConnHandle = ConnHandle
   { net      :: BullNet
   , lgr      :: LogHandle
-  , sendChan :: TChan BullMessage
-  , recvChan :: TChan BullMessage
+  , sendChan :: TChan Msg
+  , recvChan :: TChan Msg
   }
 
 newConn :: BullNet -> LogHandle -> IO ConnHandle
@@ -43,10 +43,10 @@ withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
     , handshake hndl >> withPingPong hndl (k hndl)
     ]
 
-sendMsg :: ConnHandle -> BullMessage -> IO ()
+sendMsg :: ConnHandle -> Msg -> IO ()
 sendMsg hndl = atomically . writeTChan (sendChan hndl)
 
-recvMsg :: ConnHandle -> (IO BullMessage -> IO a) -> IO a
+recvMsg :: ConnHandle -> (IO Msg -> IO a) -> IO a
 recvMsg hndl k = do
   recvChan' <- atomically $ dupTChan $ recvChan hndl
   k $ atomically $ readTChan recvChan'

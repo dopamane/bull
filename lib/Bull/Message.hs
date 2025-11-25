@@ -1,5 +1,5 @@
 module Bull.Message
-  ( BullMessage(..)
+  ( Msg(..)
   , BullPayload(..)
   , toBullPayload
   , getMessage
@@ -24,13 +24,13 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Prettyprinter
 
-data BullMessage = BullMessage
+data Msg = Msg
   { bmHeader  :: MsgHdr
   , bmPayload :: ByteString
   }
   deriving (Eq, Read, Show)
 
-instance Pretty BullMessage where
+instance Pretty Msg where
   pretty msg = vsep
     [ pretty "message:"
     , indent 2 $ vsep
@@ -40,13 +40,13 @@ instance Pretty BullMessage where
       ]
     ]
 
-getMessage :: BullNet -> Get BullMessage
+getMessage :: BullNet -> Get Msg
 getMessage n = do
   hdr <- getHeader n
   let size = fromIntegral $ bmhPayloadSize hdr
-  BullMessage hdr <$> getLazyByteString size
+  Msg hdr <$> getLazyByteString size
 
-putMessage :: BullMessage -> Put
+putMessage :: Msg -> Put
 putMessage msg = do
   putHeader $ bmHeader msg
   putLazyByteString $ bmPayload msg
@@ -84,7 +84,7 @@ getBullPayload commandName = case commandName of
 eof :: Get ()
 eof = guard =<< isEmpty
 
-toBullPayload :: BullMessage -> BullPayload
+toBullPayload :: Msg -> BullPayload
 toBullPayload m = runGet (getBullPayload cmdName) $ bmPayload m
   where
     cmdName = LC.unpack $ L.takeWhile (/= 0x00) $ bmhCommandName $ bmHeader m
@@ -104,8 +104,8 @@ putBullPayload p = case p of
 pongMsg
   :: BullNet
   -> Word64 -- ^ nonce
-  -> BullMessage
-pongMsg n nonce = BullMessage
+  -> Msg
+pongMsg n nonce = Msg
   { bmHeader  = mkMsgHdr (netStartString n) "pong" payload
   , bmPayload = payload
   }
@@ -113,23 +113,23 @@ pongMsg n nonce = BullMessage
     payload = runPut $ putBullPayload $ BmpPong nonce
 
 -- | verack message constructor
-verackMsg :: BullNet -> BullMessage
+verackMsg :: BullNet -> Msg
 verackMsg = emptyMsg "verack"
 
-versionMsg :: BullNet -> IO BullMessage
+versionMsg :: BullNet -> IO Msg
 versionMsg n = do
   payload <- encode <$> mkVersionMsg n
-  return BullMessage
+  return Msg
     { bmHeader  = mkMsgHdr (netStartString n) "version" payload
     , bmPayload = payload
     }
 
-getAddrMsg :: BullNet -> BullMessage
+getAddrMsg :: BullNet -> Msg
 getAddrMsg = emptyMsg "getaddr"
 
 -- | message with no payload
-emptyMsg :: String -> BullNet -> BullMessage
-emptyMsg msg n = BullMessage
+emptyMsg :: String -> BullNet -> Msg
+emptyMsg msg n = Msg
   { bmHeader   = mkMsgHdr (netStartString n) msg mempty
   , bmPayload  = mempty
   }
