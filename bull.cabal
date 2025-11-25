@@ -28,12 +28,14 @@ library
     Bull.Message.Header
     Bull.Message.Version
     Bull.Net
+    Bull.Pool
     Bull.Pretty
   build-depends:
     async,
     base,
     binary,
     bytestring,
+    hashable,
     iproute,
     network,
     network-run,
@@ -42,6 +44,7 @@ library
     SHA,
     stm,
     unix,
+    unordered-containers,
 
 executable bull
   default-language: Haskell2010

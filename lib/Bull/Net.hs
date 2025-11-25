@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 module Bull.Net
   ( BullNet(..)
   , mainnet
@@ -7,7 +10,9 @@ module Bull.Net
 
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
+import Data.Hashable
 import Data.IP
+import GHC.Generics
 
 -- | Network connection descriptor
 data BullNet = BullNet
@@ -15,7 +20,7 @@ data BullNet = BullNet
   , netPort        :: String     -- ^ port number
   , netStartString :: ByteString -- ^ net start string
   }
-  deriving (Eq, Read, Show)
+  deriving (Eq, Generic, Hashable, Read, Show)
 
 -- | Bitcoin mainnet
 mainnet :: String -> BullNet
