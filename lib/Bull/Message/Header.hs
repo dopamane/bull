@@ -81,4 +81,3 @@ putHeader hdr = do
   putLazyByteString $ bmhCommandName hdr
   putWord32le       $ bmhPayloadSize hdr
   putLazyByteString $ bmhChecksum    hdr
-

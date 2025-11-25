@@ -8,6 +8,7 @@ module Bull.Message
   , BullPayload(..)
   , toBullPayload
   , versionHandshake
+  , sendGetAddrMsg
   ) where
 
 import Bull.Client
@@ -117,6 +118,7 @@ data BullPayload
   | BmpPing Word64
   | BmpPong Word64
   | BmpAddr AddrMsg
+  | BmpGetAddr
   | BmpRaw ByteString
   deriving (Eq, Read, Show)
 
@@ -127,6 +129,7 @@ instance Pretty BullPayload where
     BmpPing n    -> pretty "ping" <+> pretty n
     BmpPong n    -> pretty "pong" <+> pretty n
     BmpAddr a    -> pretty "addr" <+> pretty a
+    BmpGetAddr   -> pretty "getaddr"
     BmpRaw bs    -> pretty "raw"  <+> prettyBytes bs
 
 getBullPayload :: String -> Get BullPayload
@@ -136,6 +139,7 @@ getBullPayload commandName = case commandName of
   "ping"    -> BmpPing    <$> getWord64le <* eof
   "pong"    -> BmpPong    <$> getWord64le <* eof
   "addr"    -> BmpAddr    <$> get <* eof
+  "getaddr" -> BmpGetAddr <$  eof
   _         -> BmpRaw     <$> getRemainingLazyByteString
 
 eof :: Get ()
@@ -154,6 +158,7 @@ putBullPayload p = case p of
   BmpPing n    -> putWord64le n
   BmpPong n    -> putWord64le n
   BmpAddr a    -> put a
+  BmpGetAddr   -> return ()
   BmpRaw bs    -> putLazyByteString bs
 
 -- | construct a pong message from the nonce of a ping
@@ -176,10 +181,7 @@ sendPongMsg hndl = sendBullMessage hndl . mkPongMsg (net hndl)
 
 -- | verack message constructor
 mkVerackMsg :: BullNet -> BullMessage
-mkVerackMsg n = BullMessage
-  { bmHeader  = mkBullMessageHeader (netStartString n) "verack" mempty
-  , bmPayload = mempty
-  }
+mkVerackMsg = emptyMsg "verack"
 
 sendVerackMsg :: BullMessageHandle -> IO ()
 sendVerackMsg hndl = sendBullMessage hndl $ mkVerackMsg $ net hndl
@@ -231,3 +233,16 @@ versionMsg n = do
     { bmHeader  = mkBullMessageHeader (netStartString n) "version" payload
     , bmPayload = payload
     }
+
+getAddrMsg :: BullNet -> BullMessage
+getAddrMsg = emptyMsg "getaddr"
+
+sendGetAddrMsg :: BullMessageHandle -> IO ()
+sendGetAddrMsg hndl = sendBullMessage hndl $ getAddrMsg (net hndl)
+
+-- | message with no payload
+emptyMsg :: String -> BullNet -> BullMessage
+emptyMsg msg n = BullMessage
+  { bmHeader   = mkBullMessageHeader (netStartString n) msg mempty
+  , bmPayload  = mempty
+  }
