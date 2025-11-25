@@ -7,7 +7,7 @@ module Bull.Conn
   ) where
 
 import Bull.Log
-import Bull.Message hiding (withPingPong)
+import Bull.Message
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async

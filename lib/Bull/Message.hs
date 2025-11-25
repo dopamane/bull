@@ -1,14 +1,7 @@
 module Bull.Message
-  ( BullMessageHandle
-  , withBullMessage
-  , sendBullMessage
-  , recvBullMessage
-  , withPingPong
-  , BullMessage(..)
+  ( BullMessage(..)
   , BullPayload(..)
   , toBullPayload
-  , versionHandshake
-  , sendGetAddrMsg
   , getMessage
   , putMessage
   , pongMsg
@@ -17,15 +10,11 @@ module Bull.Message
   , getAddrMsg
   ) where
 
-import Bull.Client
-import Bull.Log
 import Bull.Message.Addr
 import Bull.Message.Header
 import Bull.Message.Version
 import Bull.Net
 import Bull.Pretty
-import Control.Concurrent.Async
-import Control.Concurrent.STM
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
@@ -34,62 +23,6 @@ import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Prettyprinter
-
-data BullMessageHandle = BullMessageHandle
-  { lgr      :: LogHandle
-  , client   :: BullClientHandle
-  , net      :: BullNet
-  , frClient :: TChan BullMessage
-  }
-
-newBullMessage
-  :: LogHandle
-  -> BullClientHandle
-  -> BullNet
-  -> IO BullMessageHandle
-newBullMessage lgr' client' net' =
-  BullMessageHandle lgr' client' net' <$> newBroadcastTChanIO
-
-withBullMessage
-  :: LogHandle
-  -> BullClientHandle
-  -> BullNet
-  -> (BullMessageHandle -> IO a)
-  -> IO a
-withBullMessage lgr' client' net' k = do
-  hndl <- newBullMessage lgr' client' net'
-  either id id <$> race (runBullMessage hndl) (k hndl)
-
-sendBullMessage :: BullMessageHandle -> BullMessage -> IO ()
-sendBullMessage hndl = sendBullClient (client hndl) . runPut . putMessage
-
-recvBullMessage
-  :: BullMessageHandle
-  -> (IO BullMessage -> IO a)
-  -> IO a
-recvBullMessage hndl k = do
-  c <- atomically $ dupTChan $ frClient hndl
-  k $ atomically $ readTChan c
-
-runBullMessage :: BullMessageHandle -> IO a
-runBullMessage hndl = recvBullClient (client hndl) $ \bsIO -> do
-  say (lgr hndl) "running message decoder"
-  runDecoder hndl mempty bsIO
-
-runDecoder :: BullMessageHandle -> ByteString -> IO ByteString -> IO a
-runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
-  where
-    loop decoder
-      | L.null bs = pushChunks' =<< bsIO
-      | otherwise = pushChunks' bs
-      where
-       pushChunks' bs' = do
-        case pushChunks decoder bs' of
-         Fail bs'' _ _      -> runDecoder hndl (L.fromStrict bs'') bsIO
-         decoder'@Partial{} -> loop decoder'
-         Done bs'' _ a      -> do
-           atomically $ writeTChan (frClient hndl) a
-           runDecoder hndl (L.fromStrict bs'') bsIO
 
 data BullMessage = BullMessage
   { bmHeader  :: BullMessageHeader
@@ -179,58 +112,9 @@ pongMsg n nonce = BullMessage
   where
     payload = runPut $ putBullPayload $ BmpPong nonce
 
-sendPongMsg
-  :: BullMessageHandle
-  -> Word64 -- ^ nonce from ping
-  -> IO ()
-sendPongMsg hndl = sendBullMessage hndl . pongMsg (net hndl)
-
 -- | verack message constructor
 verackMsg :: BullNet -> BullMessage
 verackMsg = emptyMsg "verack"
-
-sendVerackMsg :: BullMessageHandle -> IO ()
-sendVerackMsg hndl = sendBullMessage hndl $ verackMsg $ net hndl
-
--- | respond to each ping with a pong
-withPingPong :: BullMessageHandle -> IO a -> IO a
-withPingPong hndl = fmap (either id id) . race loop
-  where
-    loop = recvBullMessage hndl $ \msgIO -> do
-      say (lgr hndl) "running ping-pong"
-      forever $ do
-        payload <- toBullPayload <$> msgIO
-        case payload of
-          BmpPing nonce -> sendPongMsg hndl nonce
-          _ -> return ()
-
-versionHandshake :: BullMessageHandle -> IO ()
-versionHandshake hndl = recvBullMessage hndl $ \msgIO -> do
-  sendVersionMsg hndl
-  recvVersionMsg msgIO
-  recvVerackMsg msgIO
-  sendVerackMsg hndl
-
-recvVersionMsg :: IO BullMessage -> IO ()
-recvVersionMsg msgIO = loop
-  where
-    loop = do
-      payload <- toBullPayload <$> msgIO
-      case payload of
-        BmpVersion{} -> return ()
-        _            -> loop
-
-recvVerackMsg :: IO BullMessage -> IO ()
-recvVerackMsg msgIO = loop
-  where
-    loop = do
-      payload <- toBullPayload <$> msgIO
-      case payload of
-        BmpVerack -> return ()
-        _         -> loop
-
-sendVersionMsg :: BullMessageHandle -> IO ()
-sendVersionMsg hndl = sendBullMessage hndl =<< versionMsg (net hndl)
 
 versionMsg :: BullNet -> IO BullMessage
 versionMsg n = do
@@ -242,9 +126,6 @@ versionMsg n = do
 
 getAddrMsg :: BullNet -> BullMessage
 getAddrMsg = emptyMsg "getaddr"
-
-sendGetAddrMsg :: BullMessageHandle -> IO ()
-sendGetAddrMsg hndl = sendBullMessage hndl $ getAddrMsg (net hndl)
 
 -- | message with no payload
 emptyMsg :: String -> BullNet -> BullMessage

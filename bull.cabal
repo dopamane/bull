@@ -10,6 +10,7 @@ copyright:          (c) David Cox
 category:           Crypto
 build-type:         Simple
 extra-doc-files:    CHANGELOG.md
+                    README.md
 
 library
   default-language: Haskell2010
@@ -18,7 +19,6 @@ library
   exposed-modules:
     Bull
     Bull.Cli
-    Bull.Client
     Bull.Conn
     Bull.Log
     Bull.Message
