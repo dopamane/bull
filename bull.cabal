@@ -19,6 +19,7 @@ library
     Bull
     Bull.Cli
     Bull.Client
+    Bull.Conn
     Bull.Log
     Bull.Message
     Bull.Message.Addr

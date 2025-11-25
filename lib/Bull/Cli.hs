@@ -6,7 +6,7 @@ module Bull.Cli
 import Bull.Net
 import Options.Applicative
 
-data BullCli
+newtype BullCli
   = BullClientCli BullNet
   deriving (Eq, Read, Show)
 

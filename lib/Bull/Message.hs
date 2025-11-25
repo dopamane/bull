@@ -9,6 +9,8 @@ module Bull.Message
   , toBullPayload
   , versionHandshake
   , sendGetAddrMsg
+  , getMessage
+  , putMessage
   ) where
 
 import Bull.Client
