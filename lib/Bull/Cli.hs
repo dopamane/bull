@@ -8,7 +8,7 @@ import Bull.Server
 import Options.Applicative
 
 data BullCli
-  = DaemonCli Net
+  = DaemonCli
   | ClientCli String String Rpc
   deriving (Eq, Read, Show)
 
@@ -28,7 +28,7 @@ bullCliParser = hsubparser $ mconcat
   ]
 
 daemonCliParser :: Parser BullCli
-daemonCliParser = DaemonCli <$> netParser
+daemonCliParser = pure DaemonCli
 
 netParser :: Parser Net
 netParser = asum

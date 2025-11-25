@@ -10,7 +10,7 @@ import Bull.Log
 
 bullMain :: BullCli -> IO ()
 bullMain cli = case cli of
-  DaemonCli net           -> daemon net
+  DaemonCli               -> daemon
   ClientCli host port rpc ->
     withLog $ \lgr ->
     withClient host port lgr $ \client ->

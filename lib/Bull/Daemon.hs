@@ -5,25 +5,26 @@ module Bull.Daemon
 import Bull.Conn
 import Bull.Log
 import Bull.Message
-import Bull.Net
 import Bull.Pool
+import Bull.Server
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad
 import Prettyprinter
 
-daemon :: Net -> IO ()
-daemon net =
+daemon :: IO ()
+daemon =
   withLog $ \lgr -> do
     say lgr "$$$ ₿itcoin ₿ull! $$$"
-    withPool 1 lgr $ \pool -> do
-      r <- connect pool net $ \conn ->
-        logMessages lgr conn $ do
-          sendMsg conn $ getAddrMsg net
-          threadDelay 10000000
-      threadDelay 5000000
-      disconnect pool net
-      say lgr . show =<< r
+    withPool 1 lgr $ \pool ->
+      withServer "127.0.0.1" "8000" lgr $ \srvr ->
+        recvServer srvr $ \rpcIO ->
+          forever $ do
+            rpc <- rpcIO
+            case rpc of
+              Connect net -> connect_ pool net $ \conn ->
+                logMessages lgr conn $ forever $ threadDelay maxBound
+              Disconnect net -> disconnect pool net
 
 logMessages :: Logger -> Conn -> IO a -> IO a
 logMessages lgr conn = fmap (either id id) . race loop
