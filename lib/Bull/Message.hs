@@ -26,9 +26,7 @@ import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
-import Foreign.C
 import Prettyprinter
-import System.Posix
 
 data BullMessageHandle = BullMessageHandle
   { lgr      :: LogHandle
@@ -224,36 +222,12 @@ recvVerackMsg msgIO = loop
         _         -> loop
 
 sendVersionMsg :: BullMessageHandle -> IO ()
-sendVersionMsg hndl = sendBullMessage hndl =<< mkVersionMsg (net hndl)
+sendVersionMsg hndl = sendBullMessage hndl =<< versionMsg (net hndl)
 
-mkVersionMsg :: BullNet -> IO BullMessage
-mkVersionMsg n = do
-  payload <- encode <$> mkVersionPayload n
+versionMsg :: BullNet -> IO BullMessage
+versionMsg n = do
+  payload <- encode <$> mkVersionMsg n
   return BullMessage
     { bmHeader  = mkBullMessageHeader (netStartString n) "version" payload
     , bmPayload = payload
     }
-
-mkVersionPayload :: BullNet -> IO BullVersionMsg
-mkVersionPayload n = do
-  CTime ts <- epochTime
-  return BullVersionMsg
-    { bvmVersion        = 70015
-    , bvmServices       = 0x00
-    , bvmTimestamp      = ts
-    , bvmAddrRxSvc      = 0x00
-    , bvmAddrRxIp       = netIPv6 n
-    , bvmAddrRxPort     = read (netPort n)
-    , bvmAddrTxSvc      = 0x00
-    , bvmAddrTxIp       = loopback
-    , bvmAddrTxPort     = read (netPort n)
-    , bvmNonce          = 0
-    , bvmUserAgentBytes = 0
-    , bvmUserAgent      = mempty
-    , bvmStartHeight    = 0
-    , bvmRelay          = Nothing
-    }
-
--- | ipv6 @::ffff:127.0.0.1@
-loopback :: ByteString
-loopback = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 0x7f, 0x00, 0x00, 0x01]

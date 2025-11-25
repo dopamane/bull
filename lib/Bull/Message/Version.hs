@@ -1,8 +1,10 @@
 module Bull.Message.Version
   ( BullVersionMsg(..)
+  , mkVersionMsg
   ) where
 
 import Bull.Message.CompactSize
+import Bull.Net
 import Bull.Pretty
 import Control.Applicative
 import Data.Binary
@@ -11,7 +13,9 @@ import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import Data.Int
+import Foreign.C
 import Prettyprinter
+import System.Posix
 
 -- | Version message
 data BullVersionMsg = BullVersionMsg
@@ -108,3 +112,27 @@ putBullVersionMsg m = do
   putLazyByteString $ bvmUserAgent   m
   putInt32le        $ bvmStartHeight m
   mapM_ put         $ bvmRelay       m
+
+mkVersionMsg :: BullNet -> IO BullVersionMsg
+mkVersionMsg n = do
+  CTime ts <- epochTime
+  return BullVersionMsg
+    { bvmVersion        = 70015
+    , bvmServices       = 0x00
+    , bvmTimestamp      = ts
+    , bvmAddrRxSvc      = 0x00
+    , bvmAddrRxIp       = netIPv6 n
+    , bvmAddrRxPort     = read (netPort n)
+    , bvmAddrTxSvc      = 0x00
+    , bvmAddrTxIp       = loopback
+    , bvmAddrTxPort     = read (netPort n)
+    , bvmNonce          = 0
+    , bvmUserAgentBytes = 0
+    , bvmUserAgent      = mempty
+    , bvmStartHeight    = 0
+    , bvmRelay          = Nothing
+    }
+
+-- | ipv6 @::ffff:127.0.0.1@
+loopback :: ByteString
+loopback = L.replicate 10 0x00 <> L.pack [0xff, 0xff, 0x7f, 0x00, 0x00, 0x01]
