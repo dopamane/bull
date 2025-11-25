@@ -41,7 +41,7 @@ withPool i l k = do
 worker :: Pool -> IO a
 worker = forever . join . atomically . readTChan . ioChan
 
-connect :: Pool -> BullNet -> (Conn -> IO a) -> IO (IO a)
+connect :: Pool -> BullNet -> (Conn -> IO a) -> IO (IO (Maybe a))
 connect p net k = atomically $ do
   m <- readTVar $ ioMap p
   when (M.size m >= maxConns p) $ throwSTM $ userError "exceeds max connections"
@@ -61,15 +61,13 @@ connect p net k = atomically $ do
 connect_ :: Pool -> BullNet -> (Conn -> IO a) -> IO ()
 connect_ p n = void . connect p n
 
-connection :: Pool -> BullNet -> (Conn -> IO a) -> TMVar () -> IO a
+connection :: Pool -> BullNet -> (Conn -> IO a) -> TMVar () -> IO (Maybe a)
 connection p n k d =
-  either id id <$> race (killer d) (withConn n (lgr p) k)
+  either (const $ Nothing) Just <$> race (killer d) (withConn n (lgr p) k)
     `finally` deleteConnection p n
 
-killer :: TMVar () -> IO a
-killer d = atomically $ do
-  check =<< isEmptyTMVar d
-  throwSTM $ userError "connection killed"
+killer :: TMVar () -> IO ()
+killer d = atomically $ check =<< isEmptyTMVar d
 
 deleteConnection :: Pool -> BullNet -> IO ()
 deleteConnection p n = atomically $ modifyTVar' (ioMap p) $ M.delete n

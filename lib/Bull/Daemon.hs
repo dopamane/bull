@@ -6,6 +6,7 @@ import Bull.Conn
 import Bull.Log
 import Bull.Message
 import Bull.Net
+import Bull.Pool
 import Control.Concurrent
 import Control.Concurrent.Async
 import Control.Monad
@@ -15,10 +16,14 @@ daemon :: BullNet -> IO ()
 daemon net =
   withLog $ \lgr -> do
     say lgr "$$$ ₿itcoin ₿ull! $$$"
-    withConn net lgr $ \conn ->
-      logMessages lgr conn $ do
-        sendMsg conn $ getAddrMsg net
-        forever $ threadDelay maxBound
+    withPool 1 lgr $ \pool -> do
+      r <- connect pool net $ \conn ->
+        logMessages lgr conn $ do
+          sendMsg conn $ getAddrMsg net
+          threadDelay 10000000
+      threadDelay 5000000
+      disconnect pool net
+      say lgr . show =<< r
 
 logMessages :: Logger -> Conn -> IO a -> IO a
 logMessages lgr conn = fmap (either id id) . race loop

@@ -9,4 +9,3 @@ import Bull.Daemon
 bullMain :: BullCli -> IO ()
 bullMain cli = case cli of
   DaemonCli net -> daemon net
-
