@@ -8,12 +8,14 @@ module Bull.Net
   , netIPv6
   ) where
 
+import Bull.Pretty
 import Data.Binary
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import Data.Hashable
 import Data.IP
 import GHC.Generics
+import Prettyprinter
 
 -- | Network connection descriptor
 data Net = Net
@@ -22,6 +24,16 @@ data Net = Net
   , netStartString :: ByteString -- ^ net start string
   }
   deriving (Binary, Eq, Generic, Hashable, Read, Show)
+
+instance Pretty Net where
+  pretty n = vsep
+    [ pretty "net:"
+    , indent 2 $ vsep
+      [ pretty "host: " <+> pretty (netHost n)
+      , pretty "port: " <+> pretty (netPort n)
+      , pretty "start:" <+> prettyBytes (netStartString n)
+      ]
+    ]
 
 -- | Bitcoin mainnet
 mainnet :: String -> Net

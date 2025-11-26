@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 module Bull.Message.Header
   ( MsgHdr(..)
   , mkMsgHdr
@@ -16,6 +19,7 @@ import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Digest.Pure.SHA
 import Data.Function
+import GHC.Generics
 import Prettyprinter
 
 data MsgHdr = MsgHdr
@@ -24,7 +28,7 @@ data MsgHdr = MsgHdr
   , bmhPayloadSize :: Word32
   , bmhChecksum    :: ByteString
   }
-  deriving (Eq, Read, Show)
+  deriving (Binary, Eq, Generic, Read, Show)
 
 instance Pretty MsgHdr where
   pretty hdr = vsep

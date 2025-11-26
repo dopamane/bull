@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 module Bull.Message
   ( Msg(..)
   , BullPayload(..)
@@ -22,13 +25,14 @@ import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
+import GHC.Generics
 import Prettyprinter
 
 data Msg = Msg
   { bmHeader  :: MsgHdr
   , bmPayload :: ByteString
   }
-  deriving (Eq, Read, Show)
+  deriving (Binary, Eq, Generic, Read, Show)
 
 instance Pretty Msg where
   pretty msg = vsep

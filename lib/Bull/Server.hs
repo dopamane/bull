@@ -10,6 +10,7 @@ module Bull.Server
   ) where
 
 import Bull.Log
+import Bull.Message
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -23,6 +24,7 @@ import GHC.Generics
 import Network.Run.TCP
 import Network.Socket
 import Network.Socket.ByteString.Lazy
+import Prettyprinter
 
 data Server = Server
   { lgr :: Logger
@@ -84,4 +86,11 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
 data Rpc
   = Connect    Net
   | Disconnect Net
+  | Message    Msg
   deriving (Binary, Eq, Generic, Read, Show)
+
+instance Pretty Rpc where
+  pretty rpc = case rpc of
+    Connect    n -> vsep [pretty "connect:", indent 2 $ pretty n]
+    Disconnect n -> vsep [pretty "disconnect:", indent 2 $ pretty n]
+    Message    m -> vsep [pretty m, indent 4 $ pretty $ toBullPayload m]
