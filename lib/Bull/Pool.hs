@@ -2,15 +2,16 @@
 module Bull.Pool
   ( Pool
   , withPool
-  , connect
-  , connect_
-  , disconnect
-  , connected
+  , connectNet
+  , killNet
+  , sendNet
+  , recvNet
   , readNets
   ) where
 
 import Bull.Conn
 import Bull.Log
+import Bull.Message
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -21,14 +22,13 @@ import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
 
 data Pool = Pool
-  { maxConns :: Int
-  , lgr      :: Logger
+  { lgr      :: Logger
   , ioChan   :: TChan (IO ())
-  , ioMap    :: TVar (HashMap Net (TMVar ()))
+  , ioMap    :: TVar (HashMap Net NetHandle)
   }
 
 newPool :: Int -> Logger -> IO Pool
-newPool i l = Pool i l <$> newTChanIO <*> newTVarIO mempty
+newPool _ l = Pool l <$> newTChanIO <*> newTVarIO mempty
 
 withPool
   :: Int -- ^ max concurrent connections
@@ -42,50 +42,73 @@ withPool i l k = do
 worker :: Pool -> IO a
 worker = forever . join . atomically . readTChan . ioChan
 
-connect :: Pool -> Net -> (Conn -> IO a) -> IO (IO (Maybe a))
-connect p net k = atomically $ do
-  m <- readTVar $ ioMap p
-  when (M.size m >= maxConns p) $ throwSTM $ userError "exceeds max connections"
-  when (M.member net m)         $ throwSTM $ userError "already connected"
-  r <- newEmptyTMVar
-  d <- newTMVar ()
-  writeTChan (ioChan p) $ atomically . putTMVar r =<< handleException (connection p net k d)
-  modifyTVar' (ioMap p) $ M.insert net d
-  return $ result r
-  where
-    result r = do
-      r' <- atomically $ takeTMVar r
-      case r' of
-        Left  e -> throwIO (e :: SomeException)
-        Right a -> return a
+data NetHandle = NetHandle
+  { killVar  :: TMVar ()
+  , sendChan :: TChan Msg
+  , recvChan :: TChan Msg
+  }
 
-handleException :: IO a -> IO (Either SomeException a)
-handleException k = Right `fmap` k `catches`
-  [ Handler $ \e -> throwIO (e :: SomeAsyncException)
-  , Handler $ \e -> return $ Left (e :: SomeException)
+newNetHandle :: STM NetHandle
+newNetHandle =
+  NetHandle
+    <$> newEmptyTMVar
+    <*> newBroadcastTChan
+    <*> newBroadcastTChan
+
+connectNet :: Pool -> Net -> IO ()
+connectNet p net = atomically $ do
+  m <- readTVar $ ioMap p
+  case M.lookup net m of
+    Nothing -> do
+      hndl <- newNetHandle
+      modifyTVar' (ioMap p) $ M.insert net hndl
+      s <- dupTChan $ sendChan hndl
+      writeTChan (ioChan p) $ connection p net hndl s
+    Just hndl -> do
+      s <- dupTChan $ sendChan hndl
+      writeTChan (ioChan p) $ connection p net hndl s
+
+handleException :: IO () -> IO ()
+handleException = flip catches
+  [ Handler (throwIO           :: SomeAsyncException -> IO ())
+  , Handler (const $ return () :: SomeException      -> IO ())
   ]
 
-connect_ :: Pool -> Net -> (Conn -> IO a) -> IO ()
-connect_ p n = void . connect p n
+connection :: Pool -> Net -> NetHandle -> TChan Msg -> IO ()
+connection p n hndl s =
+  handleException $
+  race_ (killer hndl) $
+  withConn n (lgr p) $ \conn ->
+  race_ (sender conn s) (recver hndl conn)
 
-connection :: Pool -> Net -> (Conn -> IO a) -> TMVar () -> IO (Maybe a)
-connection p n k d =
-  either (const Nothing) Just <$> race (killer d) (withConn n (lgr p) k)
-    `finally` deleteConnection p n
+sender :: Conn -> TChan Msg -> IO a
+sender conn s = forever $ sendMsg conn =<< atomically (readTChan s)
 
-killer :: TMVar () -> IO ()
-killer d = atomically $ check =<< isEmptyTMVar d
+recver :: NetHandle -> Conn -> IO a
+recver hndl conn = recvMsg conn $ \msgIO ->
+  forever $ atomically . writeTChan (recvChan hndl) =<< msgIO
 
-deleteConnection :: Pool -> Net -> IO ()
-deleteConnection p n = atomically $ modifyTVar' (ioMap p) $ M.delete n
+killer :: NetHandle -> IO ()
+killer = atomically . takeTMVar . killVar
 
-disconnect :: Pool -> Net -> IO ()
-disconnect p n = atomically $ do
-  m <- readTVar $ ioMap p
-  mapM_ takeTMVar $ M.lookup n m
+sendNet :: Pool -> Net -> Msg -> IO ()
+sendNet p n msg = atomically $ do
+  hndl <- (M.! n) <$> readTVar (ioMap p)
+  writeTChan (sendChan hndl) msg
 
-connected :: Pool -> Net -> STM Bool
-connected p n = M.member n <$> readTVar (ioMap p)
+recvNet :: Pool -> Net -> (IO Msg -> IO a) -> IO a
+recvNet p n k = do
+  r <- atomically $ do
+    hndl <- (M.! n) <$> readTVar (ioMap p)
+    dupTChan $ recvChan hndl
+  k $ atomically $ readTChan r
+
+killNet :: Pool -> Net -> IO ()
+killNet p n = atomically $ do
+  hndlM <- M.lookup n <$> readTVar (ioMap p)
+  case hndlM of
+    Nothing   -> return ()
+    Just hndl -> writeTMVar (killVar hndl) ()
 
 readNets :: Pool -> IO [Net]
 readNets = atomically . fmap M.keys . readTVar . ioMap

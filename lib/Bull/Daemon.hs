@@ -2,7 +2,6 @@ module Bull.Daemon
   ( daemon
   ) where
 
-import Bull.Conn
 import Bull.Log
 import Bull.Message
 import Bull.Pool
@@ -20,12 +19,13 @@ daemon =
           forever $ do
             rpc <- rpcIO
             case rpc of
-              Connect net -> connect_ pool net $ \conn ->
-                recvMsg conn $ \msgIO ->
-                  concurrently_ (passMsgs srvr msgIO) $
-                    sendMsg conn $ getAddrMsg net
-              Disconnect net -> disconnect pool net
+              Connect net -> connectNet pool net
+              Disconnect net -> killNet pool net
               Message{} -> return ()
+              Listen net ->
+                recvNet pool net $ \msgIO ->
+                  concurrently_ (passMsgs srvr msgIO) $
+                    sendNet pool net $ getAddrMsg net
               Nets{} -> sendServer srvr . Nets =<< readNets pool
 
 passMsgs :: Server -> IO Msg -> IO a

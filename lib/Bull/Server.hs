@@ -98,6 +98,7 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
 data Rpc
   = Connect    Net
   | Disconnect Net
+  | Listen     Net
   | Message    Msg
   | Nets       [Net]
   deriving (Binary, Eq, Generic, Read, Show)
@@ -106,5 +107,6 @@ instance Pretty Rpc where
   pretty rpc = case rpc of
     Connect    n -> vsep [pretty "connect:", indent 2 $ pretty n]
     Disconnect n -> vsep [pretty "disconnect:", indent 2 $ pretty n]
+    Listen     n -> vsep [pretty "listen:", indent 2 $ pretty n]
     Message    m -> vsep [pretty m, indent 4 $ pretty $ toBullPayload m]
     Nets      ns -> vsep $ pretty <$> ns
