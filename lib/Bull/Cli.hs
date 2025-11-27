@@ -53,6 +53,7 @@ rpcParser :: Parser Rpc
 rpcParser = hsubparser $ mconcat
   [ command "connect"    $ info connectParser mempty
   , command "disconnect" $ info disconnectParser mempty
+  , command "nets"       $ info (pure $ Nets []) $ progDesc "display connections"
   ]
 
 connectParser :: Parser Rpc

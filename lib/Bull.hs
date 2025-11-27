@@ -7,6 +7,7 @@ import Bull.Cli
 import Bull.Client
 import Bull.Daemon
 import Bull.Log
+import Bull.Server
 import Control.Monad
 import Prettyprinter
 
@@ -17,5 +18,10 @@ bullMain cli = case cli of
     withLog $ \lgr ->
     withClient host port lgr $ \client ->
     recvRpc client $ \rpcIO -> do
-      sendRpc client rpc
-      forever $ print . pretty =<< rpcIO
+      case rpc of
+        Nets{} -> do
+          sendRpc client rpc
+          print . pretty =<< rpcIO
+        _ -> do
+          sendRpc client rpc
+          forever $ print . pretty =<< rpcIO

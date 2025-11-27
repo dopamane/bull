@@ -14,7 +14,7 @@ daemon :: IO ()
 daemon =
   withLog $ \lgr -> do
     say lgr "$$$ ₿itcoin ₿ull! $$$"
-    withPool 1 lgr $ \pool ->
+    withPool 1000 lgr $ \pool ->
       withServer "127.0.0.1" "8000" lgr $ \srvr ->
         recvServer srvr $ \rpcIO ->
           forever $ do
@@ -26,6 +26,7 @@ daemon =
                     sendMsg conn $ getAddrMsg net
               Disconnect net -> disconnect pool net
               Message{} -> return ()
+              Nets{} -> sendServer srvr . Nets =<< readNets pool
 
 passMsgs :: Server -> IO Msg -> IO a
 passMsgs srvr msgIO = forever $ sendServer srvr . Message =<< msgIO

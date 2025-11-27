@@ -69,7 +69,7 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
       where
        pushChunks' bs' = do
         case pushChunks decoder bs' of
-         Fail bs'' _ _      -> runDecoder hndl (L.fromStrict bs'') bsIO
+         Fail{}             -> fail "decoding failed"
          decoder'@Partial{} -> loop decoder'
          Done bs'' _ a      -> do
            atomically $ writeTChan (recvChan hndl) a

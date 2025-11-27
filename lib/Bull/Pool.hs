@@ -6,6 +6,7 @@ module Bull.Pool
   , connect_
   , disconnect
   , connected
+  , readNets
   ) where
 
 import Bull.Conn
@@ -48,7 +49,7 @@ connect p net k = atomically $ do
   when (M.member net m)         $ throwSTM $ userError "already connected"
   r <- newEmptyTMVar
   d <- newTMVar ()
-  writeTChan (ioChan p) $ atomically . putTMVar r =<< try (connection p net k d)
+  writeTChan (ioChan p) $ atomically . putTMVar r =<< handleException (connection p net k d)
   modifyTVar' (ioMap p) $ M.insert net d
   return $ result r
   where
@@ -57,6 +58,12 @@ connect p net k = atomically $ do
       case r' of
         Left  e -> throwIO (e :: SomeException)
         Right a -> return a
+
+handleException :: IO a -> IO (Either SomeException a)
+handleException k = Right `fmap` k `catches`
+  [ Handler $ \e -> throwIO (e :: SomeAsyncException)
+  , Handler $ \e -> return $ Left (e :: SomeException)
+  ]
 
 connect_ :: Pool -> Net -> (Conn -> IO a) -> IO ()
 connect_ p n = void . connect p n
@@ -79,3 +86,6 @@ disconnect p n = atomically $ do
 
 connected :: Pool -> Net -> STM Bool
 connected p n = M.member n <$> readTVar (ioMap p)
+
+readNets :: Pool -> IO [Net]
+readNets = atomically . fmap M.keys . readTVar . ioMap

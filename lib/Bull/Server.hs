@@ -15,6 +15,7 @@ import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
@@ -41,14 +42,23 @@ withServer
   -> Logger
   -> (Server -> IO a)
   -> IO a
-withServer host port l k = do
+withServer host port l k = runTCPServer (Just host) port $ \sock -> do
   srvr <- newServer l
-  runTCPServer (Just host) port $ \sock ->
+  bracket_ (sayConn srvr sock) (sayDisconn srvr sock) $
     runConcurrently $ asum $ map Concurrently
       [ sender srvr sock
       , recver srvr sock
       , k srvr
       ]
+
+sayConn :: Server -> Socket -> IO ()
+sayConn srvr = sayServer srvr . ("connected " <>) . show <=< getPeerName
+
+sayDisconn :: Server -> Socket -> IO ()
+sayDisconn srvr = sayServer srvr . ("disconnected " <>) . show <=< getPeerName
+
+sayServer :: Server -> String -> IO ()
+sayServer srvr = say (lgr srvr) . ("server: " <>)
 
 sendServer :: Server -> Rpc -> IO ()
 sendServer srvr = atomically . writeTChan (sendChan srvr)
@@ -75,18 +85,21 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
       | L.null bs = pushChunks' =<< bsIO
       | otherwise = pushChunks' bs
       where
-       pushChunks' bs' = do
-        case pushChunks decoder bs' of
-         Fail bs'' _ _      -> runDecoder hndl (L.fromStrict bs'') bsIO
-         decoder'@Partial{} -> loop decoder'
-         Done bs'' _ a      -> do
-           atomically $ writeTChan (recvChan hndl) a
-           runDecoder hndl (L.fromStrict bs'') bsIO
+       pushChunks' bs'
+         | L.null bs' = fail "recv null"
+         | otherwise  = do
+           case pushChunks decoder bs' of
+             Fail{}             -> fail "decoding failed"
+             decoder'@Partial{} -> loop decoder'
+             Done bs'' _ a      -> do
+               atomically $ writeTChan (recvChan hndl) a
+               runDecoder hndl (L.fromStrict bs'') bsIO
 
 data Rpc
   = Connect    Net
   | Disconnect Net
   | Message    Msg
+  | Nets       [Net]
   deriving (Binary, Eq, Generic, Read, Show)
 
 instance Pretty Rpc where
@@ -94,3 +107,4 @@ instance Pretty Rpc where
     Connect    n -> vsep [pretty "connect:", indent 2 $ pretty n]
     Disconnect n -> vsep [pretty "disconnect:", indent 2 $ pretty n]
     Message    m -> vsep [pretty m, indent 4 $ pretty $ toBullPayload m]
+    Nets      ns -> vsep $ pretty <$> ns
