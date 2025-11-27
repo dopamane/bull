@@ -27,6 +27,7 @@ library
     Bull.Message.Addr
     Bull.Message.CompactSize
     Bull.Message.Header
+    Bull.Message.Inventory
     Bull.Message.Version
     Bull.Net
     Bull.Pool
