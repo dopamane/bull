@@ -10,6 +10,7 @@ import Bull.Server
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
@@ -36,11 +37,18 @@ withClient
   -> IO a
 withClient host port l k = runTCPClient host port $ \sock -> do
   client <- newClient l
-  runConcurrently $ asum $ map Concurrently
-    [ sender client sock
-    , recver client sock
-    , k client
-    ]
+  bracket_ (sayConn client sock) (sayDisconn client sock) $
+    runConcurrently $ asum $ map Concurrently
+      [ sender client sock
+      , recver client sock
+      , k client
+      ]
+
+sayConn :: Client -> Socket -> IO ()
+sayConn client = sayClient client . ("connected " <>) . show <=< getPeerName
+
+sayDisconn :: Client -> Socket -> IO ()
+sayDisconn client = sayClient client . ("disconnected " <>) . show <=< getPeerName
 
 sendRpc :: Client -> Rpc -> IO ()
 sendRpc client = atomically . writeTChan (sendChan client)
@@ -57,8 +65,11 @@ sender client sock = forever $ do
 
 recver :: Client -> Socket -> IO a
 recver client sock = do
-  say (lgr client) "decoding rpcs"
+  sayClient client "decoding rpcs"
   runDecoder client mempty $ recv sock 4096
+
+sayClient :: Client -> String -> IO ()
+sayClient client = say (lgr client) . mappend "client: "
 
 runDecoder :: Client -> ByteString -> IO ByteString -> IO a
 runDecoder hndl bs bsIO = loop $ runGetIncremental get
@@ -67,10 +78,12 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental get
       | L.null bs = pushChunks' =<< bsIO
       | otherwise = pushChunks' bs
       where
-       pushChunks' bs' = do
-        case pushChunks decoder bs' of
-         Fail{}             -> fail "decoding failed"
-         decoder'@Partial{} -> loop decoder'
-         Done bs'' _ a      -> do
-           atomically $ writeTChan (recvChan hndl) a
-           runDecoder hndl (L.fromStrict bs'') bsIO
+       pushChunks' bs'
+         | L.null bs' = fail "recv null bytes"
+         | otherwise  = do
+           case pushChunks decoder bs' of
+             Fail{}             -> fail "decoding failed"
+             decoder'@Partial{} -> loop decoder'
+             Done bs'' _ a      -> do
+               atomically $ writeTChan (recvChan hndl) a
+               runDecoder hndl (L.fromStrict bs'') bsIO
