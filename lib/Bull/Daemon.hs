@@ -21,7 +21,7 @@ daemon =
             case rpc of
               Connect net -> connectNet pool net
               Disconnect net -> killNet pool net
-              Message{} -> return ()
+              Message{} -> fail "not implemented"
               Listen net ->
                 recvNet pool net $ \msgIO ->
                   concurrently_ (passMsgs srvr msgIO) $

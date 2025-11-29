@@ -19,9 +19,12 @@ bullMain cli = case cli of
     withClient host port lgr $ \client ->
     recvRpc client $ \rpcIO -> do
       case rpc of
+        Connect{} -> sendRpc client rpc
+        Disconnect{} -> sendRpc client rpc
+        Message{} -> fail "not implemented"
+        Listen{} -> do
+          sendRpc client rpc
+          forever $ print . pretty =<< rpcIO
         Nets{} -> do
           sendRpc client rpc
           print . pretty =<< rpcIO
-        _ -> do
-          sendRpc client rpc
-          forever $ print . pretty =<< rpcIO
