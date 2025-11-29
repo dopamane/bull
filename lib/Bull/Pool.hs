@@ -7,6 +7,7 @@ module Bull.Pool
   , sendNet
   , recvNet
   , readNets
+  , pingNet
   ) where
 
 import Bull.Conn
@@ -20,15 +21,21 @@ import Control.Exception
 import Control.Monad
 import Data.HashMap.Strict (HashMap)
 import qualified Data.HashMap.Strict as M
+import System.Random.MWC
 
 data Pool = Pool
   { lgr      :: Logger
   , ioChan   :: TChan (IO ())
   , ioMap    :: TVar (HashMap Net NetHandle)
+  , rand     :: GenIO
   }
 
 newPool :: Int -> Logger -> IO Pool
-newPool _ l = Pool l <$> newTChanIO <*> newTVarIO mempty
+newPool _ l =
+  Pool l
+    <$> newTChanIO
+    <*> newTVarIO mempty
+    <*> createSystemRandom
 
 withPool
   :: Int -- ^ max concurrent connections
@@ -112,3 +119,16 @@ killNet p n = atomically $ do
 
 readNets :: Pool -> IO [Net]
 readNets = atomically . fmap M.keys . readTVar . ioMap
+
+pingNet :: Pool -> Net -> IO ()
+pingNet p n = recvNet p n $ \msgIO -> do
+  nonce <- uniformM $ rand p
+  sendNet p n $ pingMsg n nonce
+  waitForPong msgIO nonce
+  where
+    waitForPong msgIO nonce = do
+      pongPayload <- toBullPayload <$> msgIO
+      case pongPayload of
+        BmpPong nonce'
+          | nonce' == nonce -> return ()
+        _                   -> waitForPong msgIO nonce

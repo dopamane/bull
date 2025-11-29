@@ -13,11 +13,11 @@ import Prettyprinter
 
 bullMain :: BullCli -> IO ()
 bullMain cli = case cli of
-  DaemonCli               -> daemon
+  DaemonCli -> daemon
   ClientCli host port rpc ->
     withLog $ \lgr ->
     withClient host port lgr $ \client ->
-    recvRpc client $ \rpcIO -> do
+    recvRpc client $ \rpcIO ->
       case rpc of
         Connect{} -> sendRpc client rpc
         Disconnect{} -> sendRpc client rpc
@@ -28,3 +28,15 @@ bullMain cli = case cli of
         Nets{} -> do
           sendRpc client rpc
           print . pretty =<< rpcIO
+        Ping{} -> do
+          say lgr "ping"
+          sendRpc client rpc
+          waitForPing rpcIO
+          say lgr "pong"
+
+waitForPing :: IO Rpc -> IO ()
+waitForPing rpcIO = do
+  rpc <- rpcIO
+  case rpc of
+    Ping{} -> return ()
+    _      -> waitForPing rpcIO

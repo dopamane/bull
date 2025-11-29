@@ -27,6 +27,9 @@ daemon =
                   concurrently_ (passMsgs srvr msgIO) $
                     sendNet pool net $ getAddrMsg net
               Nets{} -> sendServer srvr . Nets =<< readNets pool
+              Ping net -> do
+                pingNet pool net
+                sendServer srvr $ Ping net
 
 passMsgs :: Server -> IO Msg -> IO a
 passMsgs srvr msgIO = forever $ sendServer srvr . Message =<< msgIO

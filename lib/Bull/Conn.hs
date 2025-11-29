@@ -4,7 +4,6 @@ module Bull.Conn
   , withConn
   , sendMsg
   , recvMsg
-  , ping
   ) where
 
 import Bull.Log
@@ -22,7 +21,6 @@ import Data.Binary.Get
 import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
-import System.Random.MWC
 
 -- | peer connection handle
 data Conn = Conn
@@ -96,22 +94,6 @@ withPong hndl = fmap (either id id) . race (recvMsg hndl pong)
         case payload of
           BmpPing nonce -> sendMsg hndl $ pongMsg (net hndl) nonce
           _             -> return ()
-
--- | ping a peer
-ping :: Conn -> IO ()
-ping hndl = recvMsg hndl $ \msgIO -> do
-  nonce <- uniformM =<< createSystemRandom
-  sendMsg hndl $ pingMsg (net hndl) nonce
-  sayConn hndl "ping sent"
-  waitForPong msgIO nonce
-  sayConn hndl "pong received"
-  where
-    waitForPong msgIO nonce = do
-      pongPayload <- toBullPayload <$> msgIO
-      case pongPayload of
-        BmpPong n
-          | n == nonce -> return ()
-        _              -> waitForPong msgIO nonce
 
 handshake :: Conn -> IO ()
 handshake hndl = recvMsg hndl $ \msgIO -> do

@@ -101,6 +101,7 @@ data Rpc
   | Listen     Net
   | Message    Msg
   | Nets       [Net]
+  | Ping       Net
   deriving (Binary, Eq, Generic, Read, Show)
 
 instance Pretty Rpc where
@@ -110,3 +111,4 @@ instance Pretty Rpc where
     Listen     n -> vsep [pretty "listen:", indent 2 $ pretty n]
     Message    m -> vsep [pretty m, indent 4 $ pretty $ toBullPayload m]
     Nets      ns -> vsep $ pretty <$> ns
+    Ping       n -> vsep [pretty "ping:", indent 2 $ pretty n]
