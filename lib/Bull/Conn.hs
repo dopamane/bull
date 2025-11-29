@@ -4,6 +4,7 @@ module Bull.Conn
   , withConn
   , sendMsg
   , recvMsg
+  , ping
   ) where
 
 import Bull.Log
@@ -21,7 +22,9 @@ import Data.Binary.Get
 import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
+import System.Random.MWC
 
+-- | peer connection handle
 data Conn = Conn
   { net      :: Net
   , lgr      :: Logger
@@ -37,6 +40,7 @@ newConn n l s =
     <*> newBroadcastTChanIO
     <*> show `fmap` getPeerName s
 
+-- | acquire peer connection
 withConn :: Net -> Logger -> (Conn -> IO a) -> IO a
 withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
   hndl <- newConn n l sock
@@ -44,12 +48,14 @@ withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
     runConcurrently $ asum $ map Concurrently
       [ sender hndl sock
       , recver hndl sock
-      , handshake hndl >> withPingPong hndl (k hndl)
+      , handshake hndl >> withPong hndl (k hndl)
       ]
 
+-- | send a bitcoin message to peer
 sendMsg :: Conn -> Msg -> IO ()
 sendMsg hndl = atomically . writeTChan (sendChan hndl)
 
+-- | stream bitcoin messages from peer
 recvMsg :: Conn -> (IO Msg -> IO a) -> IO a
 recvMsg hndl k = do
   recvChan' <- atomically $ dupTChan $ recvChan hndl
@@ -80,16 +86,32 @@ runDecoder hndl bs bsIO = loop $ runGetIncremental $ getMessage $ net hndl
            atomically $ writeTChan (recvChan hndl) a
            runDecoder hndl (L.fromStrict bs'') bsIO
 
-withPingPong :: Conn -> IO a -> IO a
-withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
+withPong :: Conn -> IO a -> IO a
+withPong hndl = fmap (either id id) . race (recvMsg hndl pong)
   where
-    pingpong msgIO = do
-      sayConn hndl "ping pong"
+    pong msgIO = do
+      sayConn hndl "pong"
       forever $ do
         payload <- toBullPayload <$> msgIO
         case payload of
           BmpPing nonce -> sendMsg hndl $ pongMsg (net hndl) nonce
           _             -> return ()
+
+-- | ping a peer
+ping :: Conn -> IO ()
+ping hndl = recvMsg hndl $ \msgIO -> do
+  nonce <- uniformM =<< createSystemRandom
+  sendMsg hndl $ pingMsg (net hndl) nonce
+  sayConn hndl "ping sent"
+  waitForPong msgIO nonce
+  sayConn hndl "pong received"
+  where
+    waitForPong msgIO nonce = do
+      pongPayload <- toBullPayload <$> msgIO
+      case pongPayload of
+        BmpPong n
+          | n == nonce -> return ()
+        _              -> waitForPong msgIO nonce
 
 handshake :: Conn -> IO ()
 handshake hndl = recvMsg hndl $ \msgIO -> do

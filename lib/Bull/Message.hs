@@ -7,6 +7,7 @@ module Bull.Message
   , toBullPayload
   , getMessage
   , putMessage
+  , pingMsg
   , pongMsg
   , versionMsg
   , verackMsg
@@ -109,14 +110,25 @@ putBullPayload p = case p of
   BmpInv i     -> put i
   BmpRaw bs    -> putLazyByteString bs
 
+pingMsg
+  :: Net
+  -> Word64 -- ^ random nonce
+  -> Msg
+pingMsg n nonce = Msg
+  { bmHeader    = mkMsgHdr (netStartString n) "ping" payload
+  , bmPayload   = payload
+  }
+  where
+    payload = runPut $ putBullPayload $ BmpPing nonce
+
 -- | construct a pong message from the nonce of a ping
 pongMsg
   :: Net
   -> Word64 -- ^ nonce
   -> Msg
 pongMsg n nonce = Msg
-  { bmHeader  = mkMsgHdr (netStartString n) "pong" payload
-  , bmPayload = payload
+  { bmHeader    = mkMsgHdr (netStartString n) "pong" payload
+  , bmPayload   = payload
   }
   where
     payload = runPut $ putBullPayload $ BmpPong nonce

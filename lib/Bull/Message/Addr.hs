@@ -4,6 +4,7 @@ module Bull.Message.Addr
   ) where
 
 import Bull.Message.CompactSize
+import Bull.Pretty
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
@@ -23,7 +24,13 @@ instance Binary AddrMsg where
   put = putAddrMsg
 
 instance Pretty AddrMsg where
-  pretty = viaShow
+  pretty a = vsep
+    [ pretty "addr:"
+    , indent 2 $ vsep
+      [ pretty "count:" <+> pretty (addrCount a)
+      , vsep $ pretty <$> addrs a
+      ]
+    ]
 
 getAddrMsg :: Get AddrMsg
 getAddrMsg = do
@@ -48,7 +55,15 @@ instance Binary AddrIp where
   put = putAddrIp
 
 instance Pretty AddrIp where
-  pretty = viaShow
+  pretty i = vsep
+    [ pretty "IP:"
+    , indent 2 $ vsep
+      [ pretty "time:    " <+> pretty (addrIpTime i)
+      , pretty "services:" <+> pretty (addrIpSvcs i)
+      , pretty "addr:    " <+> prettyBytes (addrIpAddr i)
+      , pretty "port:    " <+> pretty (addrIpPort i)
+      ]
+    ]
 
 getAddrIp :: Get AddrIp
 getAddrIp =

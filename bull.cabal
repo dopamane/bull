@@ -41,6 +41,7 @@ library
     bytestring,
     hashable,
     iproute,
+    mwc-random,
     network,
     network-run,
     optparse-applicative,
