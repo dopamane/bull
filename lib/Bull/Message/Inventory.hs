@@ -2,16 +2,27 @@ module Bull.Message.Inventory
   ( Inventory(..)
   ) where
 
+import Bull.Pretty
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.Put
 import Data.ByteString.Lazy (ByteString)
+import Prettyprinter
 
 data Inventory = Inventory
   { inventoryType :: InventoryType
   , inventoryHash :: ByteString
   }
   deriving (Eq, Read, Show)
+
+instance Pretty Inventory where
+  pretty i = vsep
+    [ pretty "inventory:"
+    , indent 2 $ vsep
+      [ pretty "type:" <+> pretty (inventoryType i)
+      , pretty "hash:" <+> prettyBytes (inventoryHash i)
+      ]
+    ]
 
 instance Binary Inventory where
   get = getInventory
@@ -34,6 +45,13 @@ data InventoryType
   | MsgFilteredBlock
   | MsgCmpctBlock
   deriving (Eq, Read, Show)
+
+instance Pretty InventoryType where
+  pretty t = pretty $ case t of
+    MsgTx            -> "MSG_TX"
+    MsgBlock         -> "MSG_BLOCK"
+    MsgFilteredBlock -> "MSG_FILTERED_BLOCK"
+    MsgCmpctBlock    -> "MSG_CMPCT_BLOCK"
 
 instance Binary InventoryType where
   get = getInventoryType
