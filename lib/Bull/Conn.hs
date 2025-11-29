@@ -12,6 +12,7 @@ import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
 import Control.Concurrent.STM
+import Control.Exception
 import Control.Monad
 import Network.Run.TCP
 import Network.Socket
@@ -26,22 +27,25 @@ data Conn = Conn
   , lgr      :: Logger
   , sendChan :: TChan Msg
   , recvChan :: TChan Msg
+  , name     :: String
   }
 
-newConn :: Net -> Logger -> IO Conn
-newConn n l =
+newConn :: Net -> Logger -> Socket -> IO Conn
+newConn n l s =
   Conn n l
     <$> newTChanIO
     <*> newBroadcastTChanIO
+    <*> show `fmap` getPeerName s
 
 withConn :: Net -> Logger -> (Conn -> IO a) -> IO a
 withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
-  hndl <- newConn n l
-  runConcurrently $ asum $ map Concurrently
-    [ sender hndl sock
-    , recver hndl sock
-    , handshake hndl >> withPingPong hndl (k hndl)
-    ]
+  hndl <- newConn n l sock
+  bracket_ (sayConn hndl "connected") (sayConn hndl "disconnected") $
+    runConcurrently $ asum $ map Concurrently
+      [ sender hndl sock
+      , recver hndl sock
+      , handshake hndl >> withPingPong hndl (k hndl)
+      ]
 
 sendMsg :: Conn -> Msg -> IO ()
 sendMsg hndl = atomically . writeTChan (sendChan hndl)
@@ -58,7 +62,7 @@ sender hndl sock = forever $ do
 
 recver :: Conn -> Socket -> IO a
 recver hndl sock = do
-  say (lgr hndl) "decoding messages"
+  sayConn hndl "decoding messages"
   runDecoder hndl mempty $ recv sock 4096
 
 runDecoder :: Conn -> ByteString -> IO ByteString -> IO a
@@ -80,7 +84,7 @@ withPingPong :: Conn -> IO a -> IO a
 withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
   where
     pingpong msgIO = do
-      say (lgr hndl) "ping pong"
+      sayConn hndl "ping pong"
       forever $ do
         payload <- toBullPayload <$> msgIO
         case payload of
@@ -89,7 +93,7 @@ withPingPong hndl = fmap (either id id) . race (recvMsg hndl pingpong)
 
 handshake :: Conn -> IO ()
 handshake hndl = recvMsg hndl $ \msgIO -> do
-  say (lgr hndl) "starting handshake"
+  sayConn hndl "starting handshake"
   sendMsg hndl =<< versionMsg (net hndl)
   versonPayload <- toBullPayload <$> msgIO
   case versonPayload of
@@ -100,4 +104,8 @@ handshake hndl = recvMsg hndl $ \msgIO -> do
     BmpVerack -> return ()
     _         -> fail "expected verack"
   sendMsg hndl $ verackMsg $ net hndl
-  say (lgr hndl) "handshake complete"
+  sayConn hndl "handshake complete"
+
+sayConn :: Conn -> String -> IO ()
+sayConn hndl msg =
+  say (lgr hndl) $ "conn " <> name hndl <> ": " <> msg
