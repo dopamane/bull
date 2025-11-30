@@ -1,10 +1,16 @@
 module Bull.Message.Addr
   ( AddrMsg(..)
   , AddrIp(..)
+  , AddrSet
+  , withAddrSet
+  , insertAddrSet
+  , readAddrSet
   ) where
 
 import Bull.Message.CompactSize
 import Bull.Pretty
+import Control.Concurrent.Async
+import Control.Concurrent.STM
 import Control.Monad
 import Data.Binary
 import Data.Binary.Get
@@ -79,3 +85,38 @@ putAddrIp i = do
   putWord64le       $ addrIpSvcs i
   putLazyByteString $ addrIpAddr i
   putWord16be       $ addrIpPort i
+
+-- | IP address tracker
+data AddrSet =
+  AddrSet
+    Int        -- max size
+    (TVar Int) -- cur len
+    (TVar [AddrIp])
+
+newAddrSet
+  :: Int -- ^ max size
+  -> IO AddrSet
+newAddrSet s = AddrSet s <$> newTVarIO 0 <*> newTVarIO []
+
+withAddrSet
+  :: Int -- ^ max size
+  -> (AddrSet -> IO a)
+  -> IO a
+withAddrSet s k = do
+  hndl <- newAddrSet s
+  either id id <$> race (monitorAddrSet hndl) (k hndl)
+
+insertAddrSet :: AddrSet -> AddrIp -> IO ()
+insertAddrSet (AddrSet _ len set) i = atomically $ do
+  modifyTVar' set (i:)
+  modifyTVar' len (+1)
+
+readAddrSet :: AddrSet -> IO [AddrIp]
+readAddrSet (AddrSet _ _ set) = readTVarIO set
+
+-- | when length greater than or equal to max size, halve the set
+monitorAddrSet :: AddrSet -> IO a
+monitorAddrSet (AddrSet siz len set) = forever $ atomically $ do
+  check . (siz <=) =<< readTVar len
+  modifyTVar set $ take $ siz `div` 2
+  writeTVar len . length =<< readTVar set
