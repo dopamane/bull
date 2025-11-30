@@ -8,6 +8,7 @@ module Bull.Conn
 
 import Bull.Log
 import Bull.Message
+import Bull.Message.Addr
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -26,28 +27,37 @@ import qualified Data.ByteString.Lazy as L
 data Conn = Conn
   { net      :: Net
   , lgr      :: Logger
+  , addrSet  :: AddrSet
   , sendChan :: TChan Msg
   , recvChan :: TChan Msg
   , name     :: String
   }
 
-newConn :: Net -> Logger -> Socket -> IO Conn
-newConn n l s =
-  Conn n l
+newConn :: Net -> Logger -> AddrSet -> Socket -> IO Conn
+newConn n l a s =
+  Conn n l a
     <$> newTChanIO
     <*> newBroadcastTChanIO
     <*> show `fmap` getPeerName s
 
 -- | acquire peer connection
-withConn :: Net -> Logger -> (Conn -> IO a) -> IO a
-withConn n l k = runTCPClient (netHost n) (netPort n) $ \sock -> do
-  hndl <- newConn n l sock
+withConn :: Net -> Logger -> AddrSet -> (Conn -> IO a) -> IO a
+withConn n l a k = runTCPClient (netHost n) (netPort n) $ \sock -> do
+  hndl <- newConn n l a sock
   bracket_ (sayConn hndl "connected") (sayConn hndl "disconnected") $
     runConcurrently $ asum $ map Concurrently
       [ sender hndl sock
       , recver hndl sock
-      , handshake hndl >> withPong hndl (k hndl)
+      , runner hndl k
       ]
+
+runner :: Conn -> (Conn -> IO a) -> IO a
+runner hndl k = do
+  handshake hndl
+  withPong hndl $
+    withAddrs hndl $ do
+      sendMsg hndl $ getAddrMsg $ net hndl
+      k hndl
 
 -- | send a bitcoin message to peer
 sendMsg :: Conn -> Msg -> IO ()
@@ -109,6 +119,17 @@ handshake hndl = recvMsg hndl $ \msgIO -> do
     _         -> fail "expected verack"
   sendMsg hndl $ verackMsg $ net hndl
   sayConn hndl "handshake complete"
+
+withAddrs :: Conn -> IO a -> IO a
+withAddrs hndl = fmap (either id id) . race (recvMsg hndl readAddrs)
+  where
+    readAddrs msgIO = do
+      sayConn hndl "addr"
+      forever $ do
+        payload <- toBullPayload <$> msgIO
+        case payload of
+          BmpAddr msg -> insertAddrMsg (addrSet hndl) msg
+          _           -> return ()
 
 sayConn :: Conn -> String -> IO ()
 sayConn hndl msg =

@@ -56,6 +56,7 @@ rpcParser = hsubparser $ mconcat
   , command "listen"     $ info (Listen <$> netParser) $ progDesc "stream messages"
   , command "nets"       $ info (pure $ Nets []) $ progDesc "display connections"
   , command "ping"       $ info (Ping <$> netParser) $ progDesc "ping peer"
+  , command "addrs"      $ info (pure $ ReadAddrs []) $ progDesc "read addresses"
   ]
 
 connectParser :: Parser Rpc

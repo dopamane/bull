@@ -11,6 +11,7 @@ module Bull.Server
 
 import Bull.Log
 import Bull.Message
+import Bull.Message.Addr
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -102,6 +103,7 @@ data Rpc
   | Message    Msg
   | Nets       [(Net, NetStatus)]
   | Ping       Net
+  | ReadAddrs  [AddrIp]
   deriving (Binary, Eq, Generic, Read, Show)
 
 instance Pretty Rpc where
@@ -118,3 +120,4 @@ instance Pretty Rpc where
         | (n, s) <- ns
       ]
     Ping       n -> vsep [pretty "ping:", indent 2 $ pretty n]
+    ReadAddrs is -> vsep $ pretty <$> is

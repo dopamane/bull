@@ -33,6 +33,9 @@ bullMain cli = case cli of
           sendRpc client rpc
           waitForPing rpcIO
           say lgr "pong"
+        ReadAddrs{} -> do
+          sendRpc client rpc
+          print . pretty =<< rpcIO
 
 waitForPing :: IO Rpc -> IO ()
 waitForPing rpcIO = do

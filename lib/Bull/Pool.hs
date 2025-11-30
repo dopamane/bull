@@ -13,6 +13,7 @@ module Bull.Pool
 import Bull.Conn
 import Bull.Log
 import Bull.Message
+import Bull.Message.Addr
 import Bull.Net
 import Control.Applicative
 import Control.Concurrent.Async
@@ -25,14 +26,15 @@ import System.Random.MWC
 
 data Pool = Pool
   { lgr    :: Logger
+  , adr    :: AddrSet
   , ioChan :: TChan (IO ())
   , ioMap  :: TVar (HashMap Net NetHandle)
   , rand   :: GenIO
   }
 
-newPool :: Logger -> IO Pool
-newPool l =
-  Pool l
+newPool :: Logger -> AddrSet -> IO Pool
+newPool l a =
+  Pool l a
     <$> newTChanIO
     <*> newTVarIO mempty
     <*> createSystemRandom
@@ -40,10 +42,11 @@ newPool l =
 withPool
   :: Int -- ^ max concurrent connections
   -> Logger
+  -> AddrSet
   -> (Pool -> IO a)
   -> IO a
-withPool i l k = do
-  p <- newPool l
+withPool i l a k = do
+  p <- newPool l a
   runConcurrently $ asum $ map Concurrently $ k p : replicate i (worker p)
 
 worker :: Pool -> IO a
@@ -93,7 +96,7 @@ connection :: Pool -> Net -> NetHandle -> TChan Msg -> IO ()
 connection p n hndl s =
   handleException $
   race_ (killer hndl) $
-  withConn n (lgr p) $ \conn ->
+  withConn n (lgr p) (adr p) $ \conn ->
   race_ (sender conn s) (recver hndl conn)
 
 sender :: Conn -> TChan Msg -> IO a

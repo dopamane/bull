@@ -3,7 +3,7 @@ module Bull.Message.Addr
   , AddrIp(..)
   , AddrSet
   , withAddrSet
-  , insertAddrSet
+  , insertAddrMsg
   , readAddrSet
   ) where
 
@@ -21,7 +21,7 @@ import Prettyprinter
 -- | addr message
 data AddrMsg = AddrMsg
   { addrCount :: Integer  -- ^ compact size
-  , addrs     :: [AddrIp] -- ^ address IPs
+  , addrIps   :: [AddrIp] -- ^ address IPs
   }
   deriving (Eq, Read, Show)
 
@@ -34,7 +34,7 @@ instance Pretty AddrMsg where
     [ pretty "addr:"
     , indent 2 $ vsep
       [ pretty "count:" <+> pretty (addrCount a)
-      , vsep $ pretty <$> addrs a
+      , vsep $ pretty <$> addrIps a
       ]
     ]
 
@@ -46,7 +46,7 @@ getAddrMsg = do
 putAddrMsg :: AddrMsg -> Put
 putAddrMsg m = do
   putCompactSize  $ addrCount m
-  mapM_ putAddrIp $ addrs m
+  mapM_ putAddrIp $ addrIps m
 
 data AddrIp = AddrIp
   { addrIpTime :: Word32     -- ^ timestamp
@@ -106,10 +106,10 @@ withAddrSet s k = do
   hndl <- newAddrSet s
   either id id <$> race (monitorAddrSet hndl) (k hndl)
 
-insertAddrSet :: AddrSet -> AddrIp -> IO ()
-insertAddrSet (AddrSet _ len set) i = atomically $ do
-  modifyTVar' set (i:)
-  modifyTVar' len (+1)
+insertAddrMsg :: AddrSet -> AddrMsg -> IO ()
+insertAddrMsg (AddrSet _ len set) msg = atomically $ do
+  modifyTVar' set (addrIps msg <>)
+  modifyTVar' len (+ fromIntegral (addrCount msg))
 
 readAddrSet :: AddrSet -> IO [AddrIp]
 readAddrSet (AddrSet _ _ set) = readTVarIO set
