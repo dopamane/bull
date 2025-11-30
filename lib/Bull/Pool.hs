@@ -24,14 +24,14 @@ import qualified Data.HashMap.Strict as M
 import System.Random.MWC
 
 data Pool = Pool
-  { lgr      :: Logger
-  , ioChan   :: TChan (IO ())
-  , ioMap    :: TVar (HashMap Net NetHandle)
-  , rand     :: GenIO
+  { lgr    :: Logger
+  , ioChan :: TChan (IO ())
+  , ioMap  :: TVar (HashMap Net NetHandle)
+  , rand   :: GenIO
   }
 
-newPool :: Int -> Logger -> IO Pool
-newPool _ l =
+newPool :: Logger -> IO Pool
+newPool l =
   Pool l
     <$> newTChanIO
     <*> newTVarIO mempty
@@ -43,7 +43,7 @@ withPool
   -> (Pool -> IO a)
   -> IO a
 withPool i l k = do
-  p <- newPool i l
+  p <- newPool l
   runConcurrently $ asum $ map Concurrently $ k p : replicate i (worker p)
 
 worker :: Pool -> IO a
@@ -53,6 +53,7 @@ data NetHandle = NetHandle
   { killVar  :: TMVar ()
   , sendChan :: TChan Msg
   , recvChan :: TChan Msg
+  , connVar  :: TVar NetStatus
   }
 
 newNetHandle :: STM NetHandle
@@ -61,19 +62,26 @@ newNetHandle =
     <$> newEmptyTMVar
     <*> newBroadcastTChan
     <*> newBroadcastTChan
+    <*> newTVar Offline
 
 connectNet :: Pool -> Net -> IO ()
 connectNet p net = atomically $ do
   m <- readTVar $ ioMap p
-  case M.lookup net m of
+  hndl <- case M.lookup net m of
     Nothing -> do
       hndl <- newNetHandle
       modifyTVar' (ioMap p) $ M.insert net hndl
-      s <- dupTChan $ sendChan hndl
-      writeTChan (ioChan p) $ connection p net hndl s
-    Just hndl -> do
-      s <- dupTChan $ sendChan hndl
-      writeTChan (ioChan p) $ connection p net hndl s
+      return hndl
+    Just hndl -> return hndl
+  status <- readTVar $ connVar hndl
+  when (status == Offline) $ do
+    writeTVar (connVar hndl) Online
+    s <- dupTChan $ sendChan hndl
+    writeTChan (ioChan p) $
+      connection p net hndl s `finally` disconnected hndl
+
+disconnected :: NetHandle -> IO ()
+disconnected hndl = atomically $ writeTVar (connVar hndl) Offline
 
 handleException :: IO () -> IO ()
 handleException = flip catches
@@ -117,8 +125,11 @@ killNet p n = atomically $ do
     Nothing   -> return ()
     Just hndl -> writeTMVar (killVar hndl) ()
 
-readNets :: Pool -> IO [Net]
-readNets = atomically . fmap M.keys . readTVar . ioMap
+readNets :: Pool -> IO [(Net, NetStatus)]
+readNets p = atomically $ do
+  m <- readTVar $ ioMap p
+  forM (M.toList m) $ \(n, hndl) ->
+    (,) n <$> readTVar (connVar hndl)
 
 pingNet :: Pool -> Net -> IO ()
 pingNet p n = recvNet p n $ \msgIO -> do

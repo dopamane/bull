@@ -100,7 +100,7 @@ data Rpc
   | Disconnect Net
   | Listen     Net
   | Message    Msg
-  | Nets       [Net]
+  | Nets       [(Net, NetStatus)]
   | Ping       Net
   deriving (Binary, Eq, Generic, Read, Show)
 
@@ -110,5 +110,11 @@ instance Pretty Rpc where
     Disconnect n -> vsep [pretty "disconnect:", indent 2 $ pretty n]
     Listen     n -> vsep [pretty "listen:", indent 2 $ pretty n]
     Message    m -> vsep [pretty m, indent 4 $ pretty $ toBullPayload m]
-    Nets      ns -> vsep $ pretty <$> ns
+    Nets      ns -> vsep
+      [ vsep
+        [ pretty n
+        , indent 2 $ pretty "status:" <+> pretty s
+        ]
+        | (n, s) <- ns
+      ]
     Ping       n -> vsep [pretty "ping:", indent 2 $ pretty n]

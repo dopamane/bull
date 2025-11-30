@@ -6,6 +6,7 @@ module Bull.Net
   , mainnet
   , testnet
   , netIPv6
+  , NetStatus(..)
   ) where
 
 import Bull.Pretty
@@ -64,3 +65,9 @@ netIPv6 n = L.pack $ fromIntegral <$> fromIPv6b ip
     ip = case read $ netHost n of
            IPv4 v4 -> ipv4ToIPv6 v4
            IPv6 v6 -> v6
+
+data NetStatus = Offline | Online
+  deriving (Binary, Eq, Generic, Read, Show)
+
+instance Pretty NetStatus where
+  pretty = viaShow
