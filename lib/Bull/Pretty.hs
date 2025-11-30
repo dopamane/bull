@@ -1,10 +1,12 @@
 module Bull.Pretty
   ( prettyBytes
+  , prettyIp
   ) where
 
 import Data.Bits
 import Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as L
+import Data.IP
 import Numeric
 import Prettyprinter
 
@@ -13,3 +15,6 @@ prettyBytes = foldMap renderByte . L.unpack
   where
     renderByte byt = renderNyb (byt `shiftR` 4) <> renderNyb (byt .&. 0xf)
     renderNyb  nyb = pretty $ showHex nyb ""
+
+prettyIp :: ByteString -> Doc ann
+prettyIp = pretty . show . toIPv6b . map fromIntegral . L.unpack

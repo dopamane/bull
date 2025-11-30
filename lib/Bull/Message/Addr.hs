@@ -64,10 +64,10 @@ instance Pretty AddrIp where
   pretty i = vsep
     [ pretty "IP:"
     , indent 2 $ vsep
-      [ pretty "time:    " <+> pretty (addrIpTime i)
-      , pretty "services:" <+> pretty (addrIpSvcs i)
-      , pretty "addr:    " <+> prettyBytes (addrIpAddr i)
-      , pretty "port:    " <+> pretty (addrIpPort i)
+      [ pretty "time:    " <+> pretty   (addrIpTime i)
+      , pretty "services:" <+> pretty   (addrIpSvcs i)
+      , pretty "addr:    " <+> prettyIp (addrIpAddr i)
+      , pretty "port:    " <+> pretty   (addrIpPort i)
       ]
     ]
 
